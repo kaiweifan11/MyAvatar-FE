@@ -40,6 +40,9 @@ const App = () => {
   return (
     <div className="app">
       <h1 className="title">My Avatar (Kaiwei)</h1>
+      <p className="caption">
+        An AI-powered digital twin of myself - connected to a LLM and built to answer anything about my background, work, and journey. Welcome to My Avatar.
+      </p>
 
       <div className="chat-window">
         {chatLog.map((entry, i) => (

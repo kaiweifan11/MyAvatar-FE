@@ -101,3 +101,11 @@ button:hover {
     transform: rotate(360deg);
   }
 }
+
+.caption {
+  text-align: center;
+  font-size: 14px;
+  color: #c0c0c0;
+  margin-bottom: 16px;
+  margin-top: 0px;
+}
