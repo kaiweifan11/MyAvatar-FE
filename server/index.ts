@@ -95,6 +95,8 @@ async function fetchAllGithubRepos(username: string): Promise<string> {
         `- ${repo.name}: ${repo.description || 'No description'}`
     ).join('\n');
 
+    console.log('📂 github repo descriptions:', repoDescriptions);
+
     return `GitHub Repositories for ${username}:\n${repoDescriptions}`;
 }
 
