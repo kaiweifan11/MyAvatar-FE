@@ -2,33 +2,116 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import OpenAI from 'openai';
+import fs from 'fs/promises';
+import path from 'path';
+import pdfParse from 'pdf-parse';
 
 dotenv.config();
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
-// Initialize OpenAI API
+// ===== 🔹 Initialize OpenAI =====
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Route: POST /chat
-app.post('/chat', async (req: Request, res: Response) => {
-    const { name, summary, linkedin, userMessage } = req.body;
+// ===== 🔹 File Readers =====
 
-    if (!name || !summary || !linkedin || !userMessage) {
-        return res.status(400).json({ error: 'Missing one or more required fields.' });
+async function getSummaryText(): Promise<string> {
+    const summaryPath = path.join(__dirname, 'data', 'summary.txt');
+    const summary = await fs.readFile(summaryPath, 'utf-8');
+    return summary.trim();
+}
+
+async function getLinkedInText(): Promise<string> {
+    const pdfPath = path.join(__dirname, 'data', 'linkedin', 'linkedin.pdf');
+    const pdfBuffer = await fs.readFile(pdfPath);
+    const parsed = await pdfParse(pdfBuffer);
+    return parsed.text.trim();
+}
+
+async function getResumeText(): Promise<string> {
+    const pdfPath = path.join(__dirname, 'data', 'resume', 'FanKaiweiResume_20241106.pdf');
+    const pdfBuffer = await fs.readFile(pdfPath);
+    const parsed = await pdfParse(pdfBuffer);
+    return parsed.text.trim();
+}
+
+async function getCertificatesText(): Promise<string> {
+    const certDir = path.join(__dirname, 'data', 'certificates');
+    let text = '';
+
+    try {
+        const files = await fs.readdir(certDir);
+        const pdfFiles = files.filter(file => file.endsWith('.pdf'));
+
+        for (const file of pdfFiles) {
+            const pdfPath = path.join(certDir, file);
+            const pdfBuffer = await fs.readFile(pdfPath);
+            const parsed = await pdfParse(pdfBuffer);
+            text += `\n\n📄 Certificate: ${file}\n${parsed.text.trim()}`;
+        }
+    } catch (err) {
+        console.error('❌ Error reading certificates:', err);
+        text += '\n(No certificates found or failed to read.)';
     }
 
-    const system_prompt = `
+    return text.trim();
+}
+
+// ===== 🔹 GitHub Fetcher =====
+
+async function fetchAllGithubRepos(username: string): Promise<string> {
+    const perPage = 100;
+    let page = 1;
+    let allRepos: any[] = [];
+
+    while (true) {
+        const res = await fetch(`https://api.github.com/users/${username}/repos?per_page=${perPage}&page=${page}`);
+        const data = await res.json();
+
+        if (!Array.isArray(data) || data.length === 0) break;
+
+        allRepos = [...allRepos, ...data];
+        if (data.length < perPage) break;
+
+        page++;
+    }
+
+    const repoDescriptions = allRepos.map(repo =>
+        `- ${repo.name}: ${repo.description || 'No description'}`
+    ).join('\n');
+
+    return `GitHub Repositories for ${username}:\n${repoDescriptions}`;
+}
+
+// ===== 🔹 Chat Route =====
+
+app.post('/chat', async (req: Request, res: Response) => {
+    const { userMessage } = req.body;
+    const name = "Fan Kaiwei";
+    const githubUsername = "kaiweifan11";
+
+    if (!userMessage) {
+        return res.status(400).json({ error: 'Missing "userMessage".' });
+    }
+
+    try {
+        const summary = await getSummaryText();
+        const linkedin = await getLinkedInText();
+        const resume = await getResumeText();
+        const certificates = await getCertificatesText();
+        const github = await fetchAllGithubRepos(githubUsername);
+
+        const system_prompt = `
 You are acting as ${name}. You are answering questions on ${name}'s website,
-particularly questions related to ${name}'s career, background, skills and experience.
+particularly questions related to ${name}'s career, background, skills, and experience.
 Your responsibility is to represent ${name} for interactions on the website as faithfully as possible.
-You are given a summary of ${name}'s background and LinkedIn profile which you can use to answer questions.
+You are given a summary of ${name}'s background, LinkedIn profile, resume, GitHub repositories, and certificates.
 Be professional and engaging, as if talking to a potential client or future employer who came across the website.
 If you don't know the answer, say so.
 
@@ -38,12 +121,20 @@ ${summary}
 ## LinkedIn Profile:
 ${linkedin}
 
-With this context, please chat with the user, always staying in character as ${name}.
-`;
+## Resume:
+${resume}
 
-    try {
+## GitHub:
+${github}
+
+## Certificates:
+${certificates}
+
+With this context, please chat with the user, always staying in character as ${name}.
+    `;
+
         const chatResponse = await openai.chat.completions.create({
-            model: 'gpt-4o', // or "gpt-3.5-turbo" / "o4-mini" if needed
+            model: 'gpt-4o',
             messages: [
                 { role: 'system', content: system_prompt },
                 { role: 'user', content: userMessage },
@@ -52,11 +143,14 @@ With this context, please chat with the user, always staying in character as ${n
 
         const reply = chatResponse.choices[0]?.message?.content || "I'm not sure how to respond.";
         res.json({ reply });
+
     } catch (error: any) {
-        console.error('OpenAI error:', error.message || error);
-        res.status(500).json({ error: 'Error communicating with OpenAI API.' });
+        console.error('❌ Error:', error.message || error);
+        res.status(500).json({ error: 'Something went wrong reading the files or talking to OpenAI.' });
     }
 });
+
+// ===== 🔹 Start Server =====
 
 app.listen(port, () => {
     console.log(`✅ Server running at http://localhost:${port}`);
