@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 import fs from 'fs/promises';
 import path from 'path';
 import pdfParse from 'pdf-parse';
+import fetch from 'node-fetch';
 
 dotenv.config();
 
@@ -81,6 +82,11 @@ async function fetchAllGithubRepos(username: string): Promise<string> {
 
     while (true) {
         const res = await fetch(`https://api.github.com/users/${username}/repos?per_page=${perPage}&page=${page}`);
+        if (!res.ok) {
+            console.error(`❌ GitHub API request failed: ${res.status} ${res.statusText}`);
+            return 'Failed to fetch GitHub repositories.';
+        }
+
         const data = await res.json();
 
         if (!Array.isArray(data) || data.length === 0) break;
@@ -91,11 +97,15 @@ async function fetchAllGithubRepos(username: string): Promise<string> {
         page++;
     }
 
+    if (allRepos.length === 0) {
+        return 'No repositories found on GitHub.';
+    }
+
     const repoDescriptions = allRepos.map(repo =>
         `- ${repo.name}: ${repo.description || 'No description'}`
     ).join('\n');
 
-    console.log('📂 github repo descriptions:', repoDescriptions);
+    console.log('📂 GitHub repo descriptions:', repoDescriptions);
 
     return `GitHub Repositories for ${username}:\n${repoDescriptions}`;
 }
