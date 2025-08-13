@@ -45,9 +45,18 @@ async function getCertificatesText(): Promise<string> {
     const certDir = path.join(__dirname, 'data', 'certificates');
     let text = '';
 
+    console.log('🔍 Checking for certificates at:', certDir);
+
     try {
         const files = await fs.readdir(certDir);
+        console.log('📂 Certificate files found:', files);
+
         const pdfFiles = files.filter(file => file.endsWith('.pdf'));
+
+        if (pdfFiles.length === 0) {
+            console.log('⚠️ No PDF certificates found in directory.');
+            return 'No certificates found.';
+        }
 
         for (const file of pdfFiles) {
             const pdfPath = path.join(certDir, file);
@@ -93,8 +102,8 @@ async function fetchAllGithubRepos(username: string): Promise<string> {
 
 app.post('/chat', async (req: Request, res: Response) => {
     const { userMessage } = req.body;
-    const name = "Fan Kaiwei";
-    const githubUsername = "kaiweifan11";
+    const name = 'Fan Kaiwei';
+    const githubUsername = 'kaiweifan11';
 
     if (!userMessage) {
         return res.status(400).json({ error: 'Missing "userMessage".' });
@@ -131,7 +140,7 @@ ${github}
 ${certificates}
 
 With this context, please chat with the user, always staying in character as ${name}.
-    `;
+`;
 
         const chatResponse = await openai.chat.completions.create({
             model: 'gpt-4o',

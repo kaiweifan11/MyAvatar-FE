@@ -7,6 +7,14 @@ I have a particular interest in coding. I've started coding when i was 16 during
 
 I started with C++, then when i joined National University of Singapore(NUS), I learned Java. Java became my core language. 
 
+
+Work 
+My expected salary is around $150,000/year, but it's highly negotiable. My notice period is 2 months
+
+While I'm currently employed as a Senior Full Stack Developer, I am always open to exploring new opportunities that allow me to grow 
+and leverage my skills in both full-stack development and project management. My focus for the past few years has been on Frontend, specifically ReactJs and Typescript.
+
+
 My Hobbies
 I love programming. I have done numerous personal projects on different programming languages. 
 
