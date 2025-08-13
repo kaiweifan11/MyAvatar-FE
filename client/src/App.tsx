@@ -16,7 +16,10 @@ const App = () => {
     setLoading(true);
 
     try {
-      const apiUrl = process.env.BE_URL;
+      const apiUrl = process.env.REACT_APP_BE_URL;
+      if (!apiUrl) {
+        throw new Error('REACT_APP_BE_URL env var is not defined');
+      }
 
       const res = await axios.post(`${apiUrl}/chat`, {
         userMessage: userMsg,
