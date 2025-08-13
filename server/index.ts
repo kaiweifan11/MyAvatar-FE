@@ -42,7 +42,7 @@ async function getResumeText(): Promise<string> {
 }
 
 async function getCertificatesText(): Promise<string> {
-    const certDir = path.join(__dirname, 'data', 'certificates');
+    const certDir = path.join(__dirname, 'data', 'Certificates');
     let text = '';
 
     console.log('🔍 Checking for certificates at:', certDir);
