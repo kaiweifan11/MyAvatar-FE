@@ -16,7 +16,9 @@ const App = () => {
     setLoading(true);
 
     try {
-      const res = await axios.post('http://localhost:3001/chat', {
+      const apiUrl = process.env.BE_URL;
+
+      const res = await axios.post(`${apiUrl}/chat`, {
         userMessage: userMsg,
       });
 
