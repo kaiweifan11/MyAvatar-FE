@@ -1,5 +1,5 @@
 # 💬 My Avatar – Your AI-Powered Digital Twin
-**My Avatar** is an AI-powered digital twin of myself — a personal agent that can intelligently answer questions about my **career**, **aspirations**, **experiences**, **qualifications**, and even aspects of my **personal life**. Inspired by the concept in *Black Mirror*, this agent is a digital manifestation of my alter ego. Just ask it anything you'd ask me — it’s designed to respond naturally and contextually, as if you were speaking to me directly.
+**My Avatar** is an AI-powered digital twin of myself — a personal agent that can intelligently answer questions about my **career**, **aspirations**, **experiences**, **qualifications**, and even aspects of my **personal life**. Inspired by the concept in *Black Mirror*, this agent is a digital manifestation of my alter ego. Just ask it anything you'd ask me — it’s designed to respond naturally and contextually, as if you were speaking to me directly. No framework.
 
 ## 🧠 What It Can Do
 - 🗣️ Answer questions about my background, journey, and expertise
