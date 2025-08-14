@@ -1,0 +1,2 @@
+ [ ] change all jpg certs to pdf certs
+ 

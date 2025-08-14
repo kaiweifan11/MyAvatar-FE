@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import './App.css';
 
@@ -7,6 +7,8 @@ const App = () => {
   const [chatLog, setChatLog] = useState<{ sender: 'user' | 'bot'; text: string }[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const handleSend = async () => {
     if (!message.trim()) return;
 
@@ -14,6 +16,7 @@ const App = () => {
     setChatLog([...chatLog, { sender: 'user', text: userMsg }]);
     setMessage('');
     setLoading(true);
+    inputRef.current?.focus();
 
     try {
       const apiUrl = process.env.REACT_APP_BE_URL;
@@ -34,7 +37,10 @@ const App = () => {
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') handleSend();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   return (
@@ -59,13 +65,14 @@ const App = () => {
 
       <div className="input-container">
         <input
+          ref={inputRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyPress}
           placeholder="Ask me about my experience..."
           disabled={loading}
         />
-        <button onClick={handleSend} disabled={loading}>➤</button>
+        <button onClick={handleSend} disabled={false}>➤</button>
       </div>
     </div>
   );
