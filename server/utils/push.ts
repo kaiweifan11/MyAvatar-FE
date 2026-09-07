@@ -1,9 +1,18 @@
-import fetch from 'node-fetch';
-import dotenv from 'dotenv';
+/**
+ * Pushover notification for contact requests and unanswered questions.
+ *
+ * Phase 2 should add a second channel here — Pushover-only means there is no
+ * queryable record of who got in touch.
+ */
+export async function push(message: string): Promise<void> {
+    // Eval runs execute the real tools; don't page Kaiwei 30 times for them.
+    // Set only by the eval runner — never document it as a config option, as
+    // setting it in a real environment silently disables all notifications.
+    if (process.env.EVAL_MODE === '1') {
+        console.log('  [eval] push suppressed:', message);
+        return;
+    }
 
-dotenv.config();
-
-export async function push(message: string) {
     const token = process.env.PUSHOVER_TOKEN;
     const user = process.env.PUSHOVER_USER;
 
@@ -15,22 +24,12 @@ export async function push(message: string) {
     try {
         const response = await fetch('https://api.pushover.net/1/messages.json', {
             method: 'POST',
-            body: new URLSearchParams({
-                token,
-                user,
-                message,
-            }),
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
+            body: new URLSearchParams({ token, user, message }),
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         });
 
-        const result = await response.json();
-
         if (!response.ok) {
-            console.error('❌ Pushover failed:', result);
-        } else {
-            console.log('✅ Pushover sent:', result);
+            console.error('❌ Pushover failed:', await response.text());
         }
     } catch (err) {
         console.error('❌ Pushover error:', err);

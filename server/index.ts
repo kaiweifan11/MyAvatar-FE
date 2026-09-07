@@ -1,78 +1,134 @@
-import express, { Request, Response } from 'express';
-import dotenv from 'dotenv';
+import 'dotenv/config';
+import express, { type Request, type Response } from 'express';
 import cors from 'cors';
-import OpenAI from 'openai';
+import {
+    convertToModelMessages,
+    createUIMessageStream,
+    pipeUIMessageStreamToResponse,
+    stepCountIs,
+    streamText,
+    toUIMessageStream,
+    type UIMessage,
+} from 'ai';
+import {
+    MAX_HISTORY_MESSAGES,
+    MAX_MESSAGE_LENGTH,
+    OFF_TOPIC_REPLY,
+} from '@myavatar/shared';
+import { chatModel, webSearchTool } from './model';
 import { tools } from './tools';
 import { getSystemPrompt } from './utils/getSystemPrompt';
-import { handleToolCall } from './utils/handleToolCall';
-
-dotenv.config();
+import { rateLimit } from './utils/rateLimit';
+import { checkRelevance } from './utils/relevanceGate';
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.use(cors());
-app.use(express.json({ limit: '5mb' }));
+// Identity comes from the environment so this repo carries no personal detail.
+const NAME = process.env.AVATAR_NAME?.trim() || 'the site owner';
 
-// ===== 🔹 Initialize OpenAI =====
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+/** Guard against a tool loop that never settles. */
+const MAX_STEPS = 6;
+
+app.use(cors());
+app.use(express.json({ limit: '1mb' }));
+
+/** Flattens a UIMessage's text parts back into a plain string. */
+function messageText(message: UIMessage): string {
+    return message.parts
+        .filter(part => part.type === 'text')
+        .map(part => part.text)
+        .join('')
+        .trim();
+}
+
+/**
+ * Emits a fixed reply through the UI message stream, so the client renders a
+ * refusal on exactly the same path as a real answer.
+ */
+function cannedReplyStream(text: string) {
+    return createUIMessageStream({
+        execute: ({ writer }) => {
+            const id = 'canned-reply';
+            writer.write({ type: 'text-start', id });
+            writer.write({ type: 'text-delta', id, delta: text });
+            writer.write({ type: 'text-end', id });
+        },
+    });
+}
+
+// ===== /health route =====
+// Also the wake-up endpoint: the free tier spins down after 15 minutes idle,
+// so this gets pinged before a presentation to absorb the cold start.
+app.get('/health', (_req: Request, res: Response) => {
+    res.json({ ok: true, uptime: process.uptime() });
 });
 
-// ===== 🔹 /chat route =====
-app.post('/chat', async (req: Request, res: Response) => {
-    const { userMessage, history = [] } = req.body;
-    const name = 'Fan Kaiwei';
-    const githubUsername = 'kaiweifan11';
+// ===== /chat route =====
+app.post('/chat', rateLimit, async (req: Request, res: Response) => {
+    const messages: UIMessage[] = Array.isArray(req.body?.messages)
+        ? req.body.messages
+        : [];
 
-    if (!userMessage) return res.status(400).json({ error: 'Missing "userMessage".' });
+    const lastMessage = messages.at(-1);
+    if (!lastMessage || lastMessage.role !== 'user') {
+        return res.status(400).json({ error: 'Expected a trailing user message.' });
+    }
+
+    const userMessage = messageText(lastMessage);
+    if (!userMessage) {
+        return res.status(400).json({ error: 'Empty message.' });
+    }
+
+    if (userMessage.length > MAX_MESSAGE_LENGTH) {
+        return res.status(400).json({
+            error: `That is a bit long - keep questions under ${MAX_MESSAGE_LENGTH} characters.`,
+        });
+    }
 
     try {
-        const system_prompt = await getSystemPrompt(name, githubUsername);
-
-        const messages: any[] = [
-            { role: 'system', content: system_prompt },
-            ...history,
-            { role: 'user', content: userMessage },
-        ];
-
-        let done = false;
-        let finalReply = "I'm not sure how to respond.";
-
-        console.log('system_prompt', system_prompt)
-        while (!done) {
-            const response = await openai.chat.completions.create({
-                model: 'gpt-4o-mini',
-                messages,
-                tools,
-                tool_choice: 'auto',
+        // Cheap filter before the expensive call: blocks general-purpose LLM use
+        // and prompt-injection attempts.
+        const { allowed } = await checkRelevance(userMessage);
+        if (!allowed) {
+            console.log('Off-topic question blocked:', userMessage.slice(0, 120));
+            await pipeUIMessageStreamToResponse({
+                response: res,
+                stream: cannedReplyStream(OFF_TOPIC_REPLY),
             });
-
-
-            const message = response.choices[0].message!;
-            const finishReason = response.choices[0].finish_reason;
-
-            console.log('message', message.content)
-
-
-            if (finishReason === 'tool_calls' && message.tool_calls) {
-                messages.push(message);
-                await handleToolCall(messages, message.tool_calls);
-            } else {
-                // No more tool calls, finish
-                done = true;
-                finalReply = message.content || finalReply;
-            }
+            return;
         }
 
-        res.json({ reply: finalReply });
-    } catch (err: any) {
-        console.error('❌ Error:', err.message || err);
-        res.status(500).json({ error: 'Something went wrong processing your message.' });
+        const system = await getSystemPrompt(NAME);
+
+        const result = streamText({
+            model: chatModel,
+            system,
+            // Cap the window so a long conversation cannot grow unbounded.
+            messages: await convertToModelMessages(messages.slice(-MAX_HISTORY_MESSAGES)),
+            // Web search is opt-in: it bills per call. With a thin public
+            // footprint it is what lets the avatar answer anything recent.
+            tools: webSearchTool ? { ...tools, web_search: webSearchTool } : tools,
+            stopWhen: stepCountIs(MAX_STEPS),
+        });
+
+        await pipeUIMessageStreamToResponse({
+            response: res,
+            stream: toUIMessageStream({ stream: result.fullStream }),
+        });
+    } catch (err) {
+        console.error('Error:', err instanceof Error ? err.message : err);
+        // Headers are already sent once streaming has begun, so only a
+        // pre-stream failure can still produce a clean error response.
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Something went wrong processing your message.' });
+        } else {
+            res.end();
+        }
     }
 });
 
-// ===== 🔹 Start Server =====
+// ===== Start Server =====
 app.listen(port, () => {
-    console.log(`✅ Server running at http://localhost:${port}`);
+    console.log(`Server running at http://localhost:${port}`);
 });

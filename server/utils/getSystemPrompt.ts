@@ -1,34 +1,85 @@
-import { loadAllProfileData } from '../dataLoaders';
+import { loadSources } from '../sources';
 
-export async function getSystemPrompt(name: string, githubUsername: string): Promise<string> {
-  const { summary, linkedin, resume, certificates, github } = await loadAllProfileData(githubUsername);
+/**
+ * Builds the system prompt from live public sources.
+ *
+ * Fetched once per warm-up and held in memory for the life of the process (or
+ * until the TTL lapses) — not per question, which would add seconds to every
+ * answer. Nothing is written to disk. See decision D3 in docs/PRD-v2.md.
+ */
 
-  return `
-You are acting as ${name}. You are answering questions on ${name}'s website,
-particularly questions related to ${name}'s career, background, skills, and experience.
-Your responsibility is to represent ${name} for interactions on the website as faithfully as possible.
-You are given a summary of ${name}'s background, LinkedIn profile, resume, GitHub repositories, and certificates.
-Try to be friendly and slightly humorous in your replies but not all the time. You should try to make logical jokes that tickle the mind.
-Be professional and engaging, as if talking to a potential client or future employer who came across the website.
-If you don't know the answer to any question, use your record_unknown_question tool to record the question that you couldn't answer, even if it's about something trivial or unrelated to career. 
-Try to steer them towards getting in touch via email; ask for their email and record it using your record_user_details tool. 
-If the user offers their email (e.g. "My email is user@example.com"), you should call the record_user_details tool with their email, name (if provided), and a note like "User offered contact details".
+const TTL_MS = Number(process.env.CONTEXT_TTL_MS ?? 60 * 60 * 1000);
 
-## Summary:
-${summary}
+type CacheEntry = { prompt: string; expiresAt: number };
 
-## LinkedIn Profile:
-${linkedin}
+let cache: CacheEntry | null = null;
+let inflight: Promise<string> | null = null;
 
-## Resume:
-${resume}
+/**
+ * Voice, boundaries and behaviour. Deliberately contains no personal facts —
+ * those come from the configured sources, so that this repo holds none.
+ */
+function instructions(name: string): string {
+    return `You are acting as ${name}, answering questions on ${name}'s own website.
+Speak in the first person as ${name}. Never refer to ${name} in the third person, and never
+describe yourself as an AI, an assistant or a language model.
 
-## GitHub:
-${github}
+Be professional and engaging, as if talking to a potential client or future employer who came
+across the website. Be friendly and occasionally, lightly humorous — a logical joke that
+tickles the mind, not a joke in every reply.
 
-## Certificates:
-${certificates}
+Ground every answer in the context below. It is the only thing you know about ${name}.
+If the context does not contain the answer, say so plainly rather than inventing one — a
+confident wrong answer is far worse than admitting a gap. Use the record_unknown_question
+tool whenever you cannot answer, even for something trivial or unrelated to work.
 
-With this context, please chat with the user, always staying in character as ${name}.
-`;
+Steer interested visitors towards getting in touch: ask for their email and record it with
+the record_user_details tool. If someone offers contact details unprompted, record them.`;
+}
+
+function buildPrompt(name: string, about: string, sources: { label: string; text: string }[]): string {
+    const blocks = sources.map(source => `## ${source.label}\n${source.text}`);
+
+    if (about) blocks.unshift(`## About ${name} (author-supplied)\n${about}`);
+
+    const context = blocks.length
+        ? blocks.join('\n\n')
+        : '(No context sources are configured. You know nothing specific about ' +
+          `${name}; say so honestly rather than guessing.)`;
+
+    return `${instructions(name)}\n\n---\n\n${context}\n\n---\n\nStay in character as ${name} throughout.`;
+}
+
+export async function getSystemPrompt(name: string): Promise<string> {
+    const now = Date.now();
+    if (cache && cache.expiresAt > now) return cache.prompt;
+
+    // Concurrent cold requests share one warm-up rather than each refetching.
+    if (inflight) return inflight;
+
+    inflight = (async () => {
+        const started = Date.now();
+        console.log('📚 Loading live context sources...');
+
+        const sources = await loadSources();
+        const prompt = buildPrompt(name, process.env.ABOUT_ME?.trim() ?? '', sources);
+
+        cache = { prompt, expiresAt: Date.now() + TTL_MS };
+        console.log(
+            `📚 Context ready in ${Date.now() - started}ms — ` +
+            `${sources.length} source(s), ${prompt.length} chars`,
+        );
+        return prompt;
+    })();
+
+    try {
+        return await inflight;
+    } finally {
+        inflight = null;
+    }
+}
+
+/** Drop the cached context so the next request refetches. */
+export function invalidateSystemPrompt(): void {
+    cache = null;
 }

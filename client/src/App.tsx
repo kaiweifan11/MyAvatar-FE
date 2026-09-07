@@ -1,81 +1,94 @@
-import React, { useState, useRef } from 'react';
-import axios from 'axios';
+import { useRef, useState } from 'react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import { MAX_MESSAGE_LENGTH } from '@myavatar/shared';
 import './App.css';
 
+const apiUrl = import.meta.env.VITE_BE_URL;
+
 const App = () => {
-  const [message, setMessage] = useState('');
-  const [chatLog, setChatLog] = useState<{ sender: 'user' | 'bot'; text: string }[]>([]);
-  const [loading, setLoading] = useState(false);
+    const [input, setInput] = useState('');
+    const inputRef = useRef<HTMLInputElement>(null);
 
-  const inputRef = useRef<HTMLInputElement>(null);
+    const { messages, sendMessage, status, error } = useChat({
+        transport: new DefaultChatTransport({ api: `${apiUrl}/chat` }),
+    });
 
-  const handleSend = async () => {
-    if (!message.trim()) return;
+    // `submitted` covers the gap before the first token arrives, which is where
+    // the cold start on the free tier is felt.
+    const busy = status === 'submitted' || status === 'streaming';
 
-    const userMsg = message.trim();
-    setChatLog([...chatLog, { sender: 'user', text: userMsg }]);
-    setMessage('');
-    setLoading(true);
-    inputRef.current?.focus();
+    const handleSend = () => {
+        const text = input.trim();
+        if (!text || busy) return;
 
-    try {
-      const apiUrl = process.env.REACT_APP_BE_URL;
-      if (!apiUrl) {
-        throw new Error('REACT_APP_BE_URL env var is not defined');
-      }
+        sendMessage({ text });
+        setInput('');
+        inputRef.current?.focus();
+    };
 
-      const res = await axios.post(`${apiUrl}/chat`, {
-        userMessage: userMsg,
-      });
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSend();
+        }
+    };
 
-      setChatLog((prev) => [...prev, { sender: 'bot', text: res.data.reply }]);
-    } catch (error) {
-      setChatLog((prev) => [...prev, { sender: 'bot', text: '⚠️ Error talking to the assistant.' }]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return (
+        <div className="app">
+            <h1 className="title">My Avatar (Kaiwei)</h1>
+            <p className="caption">
+                An AI-powered digital twin of myself - connected to a LLM and built to answer
+                anything about my background, work, and journey. Welcome to My Avatar.
+            </p>
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+            <div className="chat-window">
+                {messages.map(message => {
+                    const text = message.parts
+                        .filter(part => part.type === 'text')
+                        .map(part => part.text)
+                        .join('');
 
-  return (
-    <div className="app">
-      <h1 className="title">My Avatar (Kaiwei)</h1>
-      <p className="caption">
-        An AI-powered digital twin of myself - connected to a LLM and built to answer anything about my background, work, and journey. Welcome to My Avatar.
-      </p>
+                    if (!text) return null;
 
-      <div className="chat-window">
-        {chatLog.map((entry, i) => (
-          <div key={i} className={`message ${entry.sender}`}>
-            {entry.text}
-          </div>
-        ))}
-        {loading && (
-          <div className="message bot">
-            <span className="spinner"></span> Thinking...
-          </div>
-        )}
-      </div>
+                    return (
+                        <div
+                            key={message.id}
+                            className={`message ${message.role === 'user' ? 'user' : 'bot'}`}
+                        >
+                            {text}
+                        </div>
+                    );
+                })}
 
-      <div className="input-container">
-        <input
-          ref={inputRef}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyPress}
-          placeholder="Ask me about my experience..."
-          disabled={loading}
-        />
-        <button onClick={handleSend} disabled={false}>➤</button>
-      </div>
-    </div>
-  );
+                {status === 'submitted' && (
+                    <div className="message bot">
+                        <span className="spinner"></span> Thinking...
+                    </div>
+                )}
+
+                {error && (
+                    <div className="message bot">
+                        Something went wrong talking to the assistant. Try again in a moment.
+                    </div>
+                )}
+            </div>
+
+            <div className="input-container">
+                <input
+                    ref={inputRef}
+                    value={input}
+                    onChange={e => setInput(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Ask me about my experience..."
+                    disabled={busy}
+                />
+                <button onClick={handleSend} disabled={busy || !input.trim()}>
+                    &#10148;
+                </button>
+            </div>
+        </div>
+    );
 };
 
 export default App;

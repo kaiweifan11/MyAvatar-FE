@@ -1,69 +1,31 @@
-import { ChatCompletionTool } from 'openai/resources';
+import { tool } from 'ai';
+import { z } from 'zod';
 import { push } from '../utils/push';
 
-export const tools: ChatCompletionTool[] = [
-    {
-        type: "function",
-        function: {
-            name: "record_user_details",
-            description: "Record a user's interest in contacting Fan Kaiwei.",
-            parameters: {
-                type: "object",
-                properties: {
-                    email: {
-                        type: "string",
-                        description: "Email address of the user",
-                    },
-                    name: {
-                        type: "string",
-                        description: "Name of the user",
-                    },
-                    notes: {
-                        type: "string",
-                        description: "Extra notes about what they are interested in",
-                    },
-                },
-                required: ["email", "name", "notes"],
-            },
+export const tools = {
+    record_user_details: tool({
+        description: "Record a user's interest in contacting Fan Kaiwei.",
+        inputSchema: z.object({
+            email: z.string().describe('Email address of the user'),
+            name: z.string().describe('Name of the user'),
+            notes: z.string().describe('Extra notes about what they are interested in'),
+        }),
+        execute: async ({ email, name, notes }) => {
+            await push(`📩 New interest from ${name} (${email}): ${notes}`);
+            return { success: true };
         },
-    },
-    {
-        type: "function",
-        function: {
-            name: "record_unknown_question",
-            description: "Record a question that the assistant doesn't know how to answer.",
-            parameters: {
-                type: "object",
-                properties: {
-                    question: {
-                        type: "string",
-                        description: "The unknown question the assistant could not answer",
-                    },
-                },
-                required: ["question"],
-            },
+    }),
+
+    record_unknown_question: tool({
+        description: "Record a question that the assistant doesn't know how to answer.",
+        inputSchema: z.object({
+            question: z
+                .string()
+                .describe('The unknown question the assistant could not answer'),
+        }),
+        execute: async ({ question }) => {
+            await push(`❓ Unknown question received: ${question}`);
+            return { recorded: true };
         },
-    },
-];
-
-export async function record_user_details({
-    email,
-    name,
-    notes,
-}: {
-    email: string;
-    name: string;
-    notes: string;
-}) {
-    await push(`📩 New interest from ${name} (${email}): ${notes}`);
-    return { success: true };
-}
-
-export async function record_unknown_question({
-    question,
-}: {
-    question: string;
-}) {
-    await push(`❓ Unknown question received: ${question}`);
-    return { recorded: true };
-}
+    }),
+};
