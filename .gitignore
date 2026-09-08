@@ -1,1 +1,9 @@
 .env
+.env.*
+!.env.example
+
+node_modules/
+
+# Personal data is never committed. Files live on local disk and on the
+# host's filesystem only; Phase 2 removes the dependency entirely.
+server/data/

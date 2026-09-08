@@ -1,0 +1,25 @@
+/*
+ * Karaoke highlighting for a spoken answer.
+ *
+ * Low contrast between states on purpose: the room is reading the whole answer,
+ * not just the current word, so the marker guides the eye without fragmenting
+ * the text into three visibly different blocks.
+ */
+
+.spoken-done {
+    opacity: 0.62;
+    transition: opacity 200ms ease;
+}
+
+.spoken-now {
+    color: #9dc0ff;
+    text-shadow: 0 0 12px rgba(109, 155, 245, 0.35);
+}
+
+.spoken-todo {
+    opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spoken-done { transition: none; }
+}

@@ -1,0 +1,215 @@
+/*
+ * The avatar's presence.
+ *
+ * Concentric rings rather than a plasma sphere: that look is everywhere, and
+ * fine noise detail does not survive being projected at size. Each state has
+ * its own motion so the room can read it at a glance.
+ *
+ * CENTRING: every layer is placed with top/left 50% and pulled back by half its
+ * own size with a translate. The obvious `inset: 0; margin: auto` fails here —
+ * the outer ring is deliberately WIDER than its container, and margin:auto
+ * cannot centre an overflowing box, so the browser resolves the overconstrained
+ * margins by shoving it right. Every transform below therefore carries the
+ * translate, or the animation would drop the centring on its first frame.
+ */
+
+.avatar-orb {
+    position: relative;
+    display: block;
+    flex: none;
+    margin: 0 auto;
+}
+
+.avatar-orb .ring,
+.avatar-orb .core,
+.avatar-orb .halo,
+.avatar-orb .arc,
+.avatar-orb .art {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+}
+
+.avatar-orb .core {
+    width: 30%;
+    height: 30%;
+    background: radial-gradient(circle at 35% 32%, #a9c8ff 0%, #5b8bf0 55%, #3559b8 100%);
+    box-shadow: 0 0 22px rgba(109, 155, 245, 0.55);
+}
+
+.avatar-orb .halo {
+    width: 46%;
+    height: 46%;
+    background: radial-gradient(circle, rgba(109, 155, 245, 0.28) 0%, transparent 70%);
+}
+
+.avatar-orb .ring {
+    border: 1.5px solid rgba(109, 155, 245, 0.5);
+    opacity: 0;
+}
+
+.avatar-orb .ring.middle { width: 66%; height: 66%; }
+.avatar-orb .ring.outer  { width: 100%; height: 100%; border-color: rgba(109, 155, 245, 0.28); }
+
+/* ---------- idle: a slow breath ---------- */
+
+.avatar-orb.state-idle .core {
+    animation: orb-breathe 4.2s ease-in-out infinite;
+}
+.avatar-orb.state-idle .ring.middle {
+    opacity: 0.25;
+    animation: orb-breathe 4.2s ease-in-out infinite;
+}
+
+/* ---------- listening: ripples running inward ----------
+ * A brighter cyan, not green and not violet. It has to be unmistakably a
+ * different state from the speaking indigo while staying in the same family as
+ * the blue artwork — shifting hue too far makes the orb look like it changed
+ * identity rather than changed mode. Cyan reads as "receiving" and sits a step
+ * along from #6d9bf5 rather than across from it. */
+
+.avatar-orb.state-listening .core {
+    background: radial-gradient(circle at 35% 32%, #cdf1ff 0%, #4fbdea 55%, #2a76ad 100%);
+    box-shadow: 0 0 22px rgba(79, 189, 234, 0.55);
+}
+.avatar-orb.state-listening .halo {
+    background: radial-gradient(circle, rgba(79, 189, 234, 0.3) 0%, transparent 70%);
+}
+.avatar-orb.state-listening .ring {
+    border-color: rgba(96, 205, 245, 0.6);
+    animation: orb-contract 2s ease-in infinite;
+}
+.avatar-orb.state-listening .ring.outer { animation-delay: 1s; }
+
+/* ---------- thinking: an arc orbiting the core ---------- */
+
+.avatar-orb.state-thinking .ring.middle {
+    opacity: 0.2;
+}
+.avatar-orb.state-thinking .arc {
+    width: 66%;
+    height: 66%;
+    border: 2px solid transparent;
+    border-top-color: #8ea8f7;
+    border-right-color: rgba(142, 168, 247, 0.35);
+    animation: orb-spin 1.15s linear infinite;
+}
+.avatar-orb.state-thinking .core {
+    animation: orb-breathe 1.6s ease-in-out infinite;
+}
+
+/* ---------- speaking: a ring per spoken word ---------- */
+
+.avatar-orb.state-speaking.word-synced .ring.middle {
+    animation: orb-expand 680ms ease-out;
+}
+.avatar-orb.state-speaking.word-synced .ring.outer {
+    animation: orb-expand 680ms ease-out 100ms;
+}
+.avatar-orb.state-speaking.word-synced .core {
+    animation: orb-beat 680ms ease-out;
+}
+
+/* No boundary events (network voices send none): keep a steady rhythm rather
+   than freezing, so it still reads as speaking. */
+.avatar-orb.state-speaking:not(.word-synced) .ring.middle {
+    animation: orb-expand 1500ms ease-out infinite;
+}
+.avatar-orb.state-speaking:not(.word-synced) .ring.outer {
+    animation: orb-expand 1500ms ease-out 260ms infinite;
+}
+.avatar-orb.state-speaking:not(.word-synced) .core {
+    animation: orb-breathe 1500ms ease-in-out infinite;
+}
+
+/* Every keyframe keeps the centring translate — without it the first frame
+   would snap each layer down and right by half its size. */
+@keyframes orb-expand {
+    0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0.85; }
+    100% { transform: translate(-50%, -50%) scale(1.3); opacity: 0; }
+}
+
+@keyframes orb-contract {
+    0%   { transform: translate(-50%, -50%) scale(1.3); opacity: 0; }
+    45%  { opacity: 0.7; }
+    100% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+}
+
+@keyframes orb-beat {
+    0%   { transform: translate(-50%, -50%) scale(1); }
+    28%  { transform: translate(-50%, -50%) scale(1.28); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes orb-breathe {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.85; }
+    50%      { transform: translate(-50%, -50%) scale(1.12); opacity: 1; }
+}
+
+@keyframes orb-spin {
+    0%   { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* A projected animation loop in front of a room is exactly where this matters. */
+@media (prefers-reduced-motion: reduce) {
+    .avatar-orb .ring,
+    .avatar-orb .core,
+    .avatar-orb .halo,
+    .avatar-orb .arc,
+    .avatar-orb .art {
+        animation: none !important;
+    }
+    .avatar-orb .ring.middle { opacity: 0.4; }
+}
+
+/* ---------- Generated artwork as the core ----------
+ *
+ * Composited with mix-blend-mode: screen so a pure black background drops out
+ * entirely — the practical way to get transparency from image models that do
+ * not produce a reliable alpha channel.
+ *
+ * With a strong image in the middle, only the RINGS change colour per state.
+ * Tinting detailed artwork fights it and looks muddy; leaving the core constant
+ * and letting the rings carry the state reads far better.
+ */
+
+.avatar-orb.has-art .ring.middle { width: 86%; height: 86%; }
+.avatar-orb.has-art .ring.outer  { width: 106%; height: 106%; }
+.avatar-orb.has-art .arc { width: 92%; height: 92%; }
+
+.avatar-orb .art {
+    width: 78%;
+    height: 78%;
+    object-fit: contain;
+    mix-blend-mode: screen;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* The halo would wash out detailed artwork. */
+.avatar-orb.has-art .halo {
+    display: none;
+}
+
+.avatar-orb.has-art.state-idle .art {
+    animation: orb-breathe 4.2s ease-in-out infinite;
+}
+
+.avatar-orb.has-art.state-thinking .art {
+    animation: orb-breathe 1.6s ease-in-out infinite;
+}
+
+.avatar-orb.has-art.state-listening .art {
+    animation: orb-breathe 2.4s ease-in-out infinite;
+}
+
+.avatar-orb.has-art.state-speaking.word-synced .art {
+    animation: orb-beat 680ms ease-out;
+}
+
+.avatar-orb.has-art.state-speaking:not(.word-synced) .art {
+    animation: orb-breathe 1500ms ease-in-out infinite;
+}
