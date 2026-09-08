@@ -47,12 +47,24 @@ every request, because Vite inlines `VITE_*` at build time.
 
 ## 1. Deploy with the Blueprint (recommended)
 
-Existing services, confirmed 2026-09-08:
+Live services, confirmed 2026-09-08:
 
-| Service | Type | Region | Notes |
+| Service | Type | Region | Hostname |
 |---|---|---|---|
-| `MyAvatar-BE` | Web Service (Node) | Singapore | Deployed recently |
-| `MyAvatar-FE-1` | Static Site | Global | Live ~1 year, still the CRA build |
+| `MyAvatar-BE` | Web Service (Node) | Singapore | **`myavatar-fe.onrender.com`** |
+| `MyAvatar-FE-1` | Static Site | Global | **`myavatar-fe-1.onrender.com`** |
+
+> ⚠️ **The hostnames are misleading.** The *backend* answers on
+> `myavatar-fe.onrender.com` — no "be" anywhere in it — because Render derived
+> that hostname from the repository name (`MyAvatar-FE`) when the service was
+> first created, and renaming the service to `MyAvatar-BE` afterwards did not
+> change it. The frontend is the one with the `-1` suffix.
+>
+> So `VITE_BE_URL` on the static site is `https://myavatar-fe.onrender.com`,
+> which looks wrong and is right. Check `/health` before assuming a URL is
+> stale: the backend returns `{"ok":true,"uptime":...}`, while an unknown
+> Render subdomain returns a plain-text `Not Found` that is indistinguishable
+> from Express's own 404.
 
 [`render.yaml`](../render.yaml) uses **these exact names**, which matters: Render
 adopts an existing resource when the name in the Blueprint matches, and creates a
@@ -139,7 +151,35 @@ and still expects `REACT_APP_BE_URL`. Every value below changes.
 
 ---
 
-## 3. After deploying
+## 3. Verifying a deploy
+
+From the outside, without opening the browser:
+
+```bash
+BE=https://myavatar-fe.onrender.com
+
+# Liveness, and the wake-up call before a presentation.
+curl "$BE/health"                 # {"ok":true,"uptime":...}
+
+# A real answer, streamed.
+curl -N -X POST "$BE/chat" -H 'Content-Type: application/json'   -d '{"messages":[{"id":"1","role":"user","parts":[{"type":"text","text":"Where did you go to university?"}]}]}'
+```
+
+To confirm the frontend picked up `VITE_BE_URL`, check what got baked into the
+bundle — Vite inlines it at build time, so this is the only way to be sure a
+rebuild actually took:
+
+```bash
+FE=https://myavatar-fe-1.onrender.com
+ASSET=$(curl -s "$FE/" | grep -oE '/assets/[A-Za-z0-9._-]+\.js' | head -1)
+curl -s "$FE$ASSET" | grep -oE 'https://[a-z0-9-]+\.onrender\.com' | sort -u
+```
+
+Verified working in production on 2026-09-08: NUS/Information Systems from
+`ABOUT_ME`, PMP and Machine Learning from the resume via `RESUME_URL`, and an
+off-topic coding request correctly refused by the relevance gate.
+
+## 4. After deploying
 
 - **Context is cached in memory for an hour.** Changing a source variable, or
   changing what a linked URL contains, does nothing to a running instance until
