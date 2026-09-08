@@ -1,6 +1,6 @@
 # MyAvatar v2 — Product Requirements
 
-**Status:** Phases 0-2 complete and configured. Eval 31/32. Next: Phase 3 (presentation Q&A).
+**Status:** Phases 0-3 complete. Next: Phase 4 (audience join, speech-to-speech).
 **Branch:** `version-2`
 **Last updated:** 2026-09-07
 
@@ -204,24 +204,34 @@ Also done, discovered mid-phase:
 
 ### Phase 3 — Presentation Q&A
 
-- [ ] Prepare-session screen: wakes the service, warm-loads context, accepts the deck
-- [ ] Client-side deck parsing — PDF and PPTX → per-slide text **+ speaker notes**
-      (speaker notes are the highest-value signal and are usually forgotten)
-- [ ] Q&A persona: answers grounded in the deck first, bio second, and declines gracefully
-      rather than inventing
-- [ ] Presenter chat panel, designed to be legible on a shared screen / projector
-- [ ] Cold-start mitigation: Render free tier spins down after 15 min idle with a 30–60s
-      cold start, and infrequent use means *always* hitting it. The prepare-session step
-      doubles as the warm-up. Optional free cron pinger on talk days as backup
-- [ ] **Pre-presentation checklist**, surfaced in the prepare-session screen rather than
-      left to memory. Both of these fail silently and are indistinguishable from a code bug:
-      1. **Credit balance is non-zero.** Credits expire annually and lapse with no warning
-         (see §10). A zero balance means every answer fails live.
-      2. **Service is warmed** and context is loaded.
-      Ideally the prepare screen makes a real cheap API call and shows a green/red state, so
-      a dead key is caught minutes before the talk rather than during Q&A.
-- [ ] Consider passing rendered slide images to a vision model — charts and diagrams carry
-      meaning that text extraction loses
+- [x] **Prepare screen** at `/present`: load a deck, then run readiness checks.
+- [x] **Client-side deck parsing** (decision D8). PPTX via JSZip, reading both
+      `ppt/slides/slideN.xml` and the parallel `ppt/notesSlides/notesSlideN.xml`; PDF via
+      pdf.js. Slides never reach the server. Verified against a synthetic PPTX fixture
+      (`client/src/deck/_fixture.ts`) rather than needing PowerPoint installed — it covers
+      numeric slide ordering (slide10 must not sort before slide2), the slide-number
+      placeholder PowerPoint puts in the notes, and entity decoding.
+- [x] **Speaker notes**, which is why PPTX is preferred and the UI says so. A PDF export
+      discards them, and they are usually the richest signal — bullets are headlines, notes
+      are what the presenter meant to say.
+- [x] **`GET /ready`** — the pre-presentation checklist as one call. Wakes the service,
+      rebuilds context, and spends a few tokens on a real model call, because that is the
+      only way to prove the key works and has credit. Every failure it reports has already
+      happened silently in this project: expired credits, a non-public Drive link, unset
+      SMTP.
+- [x] **`POST /present`** with the Q&A persona. Short answers, deck first and background
+      second, slide citations, and a graceful decline. **No relevance gate**, deliberately:
+      the gate exists to stop the public web treating the avatar as a free LLM, but the
+      presenter is the only person typing (D2), and the gate would block questions about the
+      talk's own subject — "explain how Kubernetes works" is abuse on the website and a fair
+      audience question if the talk is about Kubernetes.
+- [x] Presenter panel styled for a projector: large answer type, quiet chrome.
+- [x] Route split so the deck parsers load only when presenting — the main bundle is
+      unchanged at 361KB, with the presentation code in a 101KB chunk and pdf.js in a
+      further 431KB chunk loaded only when a PDF is opened.
+- [ ] Try passing rendered slide images to a vision model — charts and diagrams carry
+      meaning that text extraction loses.
+- [ ] Optional cron pinger on talk days, as backup to the prepare screen's wake-up.
 
 ### Phase 4 — Later
 

@@ -13,6 +13,8 @@
     "@ai-sdk/react": "^4.0.96",
     "@myavatar/shared": "workspace:*",
     "ai": "^7.0.93",
+    "jszip": "^3.10.1",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

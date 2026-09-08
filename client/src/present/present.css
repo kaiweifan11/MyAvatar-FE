@@ -1,0 +1,269 @@
+/*
+ * Presentation Q&A.
+ *
+ * Sized for a projector at the back of a room, not a laptop at arm's length:
+ * large type, high contrast, generous line height. The answer is the only thing
+ * on screen that matters, so everything else stays quiet.
+ */
+
+.present {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+    color: #e8e8ea;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.present h1 {
+    font-size: 1.9rem;
+    margin: 0 0 0.4rem;
+}
+
+.present .lede {
+    color: #a0a0a8;
+    margin: 0 0 2rem;
+    line-height: 1.5;
+}
+
+/* ---------- Prepare ---------- */
+
+.present .card {
+    background: #1b1b1f;
+    border: 1px solid #2c2c33;
+    border-radius: 10px;
+    padding: 1.25rem 1.4rem;
+    margin-bottom: 1.25rem;
+}
+
+.present .card h2 {
+    font-size: 1.05rem;
+    margin: 0 0 0.9rem;
+    color: #c8c8d0;
+}
+
+.present .hint {
+    color: #8a8a93;
+    font-size: 0.87rem;
+    line-height: 1.5;
+    margin: 0.7rem 0 0;
+}
+
+.present .status {
+    margin: 0.9rem 0 0;
+    font-size: 0.92rem;
+}
+
+.present .status.good,
+.present .checks li.good {
+    color: #6ee7a8;
+}
+
+.present .status.bad,
+.present .checks li.bad {
+    color: #ff8b8b;
+}
+
+.present .checks {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0 0;
+    font-size: 0.9rem;
+    line-height: 1.7;
+}
+
+.present .checks .mark {
+    display: inline-block;
+    width: 1.2rem;
+    font-weight: 700;
+}
+
+.present .checks strong {
+    color: #e8e8ea;
+    margin-right: 0.4rem;
+}
+
+.present input[type='file'] {
+    color: #c8c8d0;
+    font-size: 0.92rem;
+}
+
+.present button {
+    background: #2f2f37;
+    color: #e8e8ea;
+    border: 1px solid #3d3d47;
+    border-radius: 7px;
+    padding: 0.55rem 1.1rem;
+    font-size: 0.94rem;
+    cursor: pointer;
+}
+
+.present button:hover:not(:disabled) {
+    background: #3a3a44;
+}
+
+.present button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.present button.primary {
+    background: #3b6ef5;
+    border-color: #3b6ef5;
+    font-size: 1rem;
+    padding: 0.7rem 1.6rem;
+}
+
+.present button.primary:hover:not(:disabled) {
+    background: #4d7bf7;
+}
+
+.present button.link {
+    background: none;
+    border: none;
+    color: #8a8a93;
+    padding: 0;
+    font-size: 0.85rem;
+    text-decoration: underline;
+}
+
+/* ---------- Q&A ---------- */
+
+.present.qa {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    max-width: 68rem;
+}
+
+.qa-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #6f6f78;
+    font-size: 0.85rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #26262c;
+}
+
+.answers {
+    flex: 1;
+    padding: 1.6rem 0;
+    overflow-y: auto;
+}
+
+.turn {
+    margin-bottom: 1.6rem;
+}
+
+/* The question is context; the answer is what the room reads. */
+.turn.user {
+    color: #8a8a93;
+    font-size: 1.05rem;
+}
+
+.turn.user .who {
+    font-weight: 700;
+    margin-right: 0.6rem;
+    color: #5c5c66;
+}
+
+.turn.user p,
+.turn.assistant p {
+    margin: 0;
+    display: inline;
+}
+
+.turn.assistant {
+    font-size: 1.6rem;
+    line-height: 1.5;
+    color: #f2f2f5;
+}
+
+.turn.assistant p {
+    display: block;
+}
+
+.turn.error {
+    font-size: 1.05rem;
+    color: #ff8b8b;
+}
+
+.thinking {
+    color: #6f6f78;
+    font-size: 1.1rem;
+}
+
+.ask {
+    display: flex;
+    gap: 0.7rem;
+    padding-top: 1rem;
+    border-top: 1px solid #26262c;
+}
+
+.ask input {
+    flex: 1;
+    background: #17171b;
+    border: 1px solid #33333c;
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    color: #e8e8ea;
+    font-size: 1.05rem;
+}
+
+.ask input:focus {
+    outline: none;
+    border-color: #3b6ef5;
+}
+
+@media (max-width: 700px) {
+    .turn.assistant {
+        font-size: 1.25rem;
+    }
+}
+
+/* ---------- Deck preview ----------
+ * "12 slides" says nothing about whether the text is any good. Showing the
+ * extracted content makes a bad parse visible before the Q&A rather than
+ * during it. */
+
+.present .preview {
+    margin-top: 1rem;
+    border-top: 1px solid #2c2c33;
+    padding-top: 0.9rem;
+}
+
+.present .preview summary {
+    cursor: pointer;
+    color: #8a9dd0;
+    font-size: 0.88rem;
+}
+
+.present .slide-preview {
+    margin: 1rem 0 0;
+    padding-left: 0.9rem;
+    border-left: 2px solid #2c2c33;
+}
+
+.present .slide-preview h3 {
+    margin: 0 0 0.3rem;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6f6f78;
+}
+
+.present .slide-preview pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: inherit;
+    font-size: 0.87rem;
+    line-height: 1.5;
+    color: #c8c8d0;
+}
+
+.present .slide-preview pre.notes {
+    margin-top: 0.4rem;
+    color: #8fbf9f;
+    font-size: 0.83rem;
+}
