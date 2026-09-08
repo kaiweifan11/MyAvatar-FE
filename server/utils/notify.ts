@@ -29,6 +29,11 @@ function emailConfigured(): boolean {
     return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 }
 
+/**
+ * Pushover remains supported as an extra channel and activates on its own if
+ * both variables are set. Left out of .env.example deliberately: email covers
+ * this, and Pushover costs $4.99 per platform once its 30-day trial ends.
+ */
 function pushoverConfigured(): boolean {
     return Boolean(process.env.PUSHOVER_TOKEN && process.env.PUSHOVER_USER);
 }
@@ -56,6 +61,10 @@ function getTransporter(): Transporter {
 }
 
 async function sendEmail(subject: string, body: string): Promise<void> {
+    // NOTIFY_EMAIL_TO and SMTP_FROM are supported but intentionally left out of
+    // .env.example: both default to SMTP_USER, which is what you want when the
+    // sender and recipient are the same person. Set them only to send somewhere
+    // other than the sending account.
     const to = process.env.NOTIFY_EMAIL_TO || process.env.SMTP_USER;
     const from = process.env.SMTP_FROM || process.env.SMTP_USER;
 

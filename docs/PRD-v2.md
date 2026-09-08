@@ -1,6 +1,6 @@
 # MyAvatar v2 — Product Requirements
 
-**Status:** Phases 0-2 code complete. Avatar has no knowledge until sources are configured — see Phase 2.
+**Status:** Phases 0-2 complete and configured. Eval 31/32. Next: Phase 3 (presentation Q&A).
 **Branch:** `version-2`
 **Last updated:** 2026-09-07
 
@@ -182,7 +182,17 @@ Also done, discovered mid-phase:
       the PRD originally imagined.
 - [ ] "Recent activity" paste box for LinkedIn (D9) — no home until the Phase 3 prepare
       screen exists. Interim: paste recent posts into `ABOUT_ME`.
-- [ ] ⚠️ **NEEDS KAIWEI: configure the sources.** Measured 2026-09-07 immediately after
+- [x] **Sources configured** 2026-09-07/08: `ABOUT_ME` (the old summary.txt, verbatim),
+      `SOURCE_URLS` (GitHub profile), `RESUME_URL` (Google Drive). Suite back to 31/32 with
+      facts 14/14.
+- [x] Two silent-corruption bugs found while wiring the resume, both of which put garbage
+      into the prompt while reporting success:
+      1. A non-public Drive link returns **HTTP 200 with a sign-in page**, which was being
+         ingested as if it were the resume. Now detected and rejected with instructions.
+      2. PDF detection keyed off the content-type header and a `.pdf` suffix. Drive's
+         direct-download URL has neither, so raw `%PDF-1.5 ... FlateDecode` bytes were fed
+         to the model as text. Now sniffs the `%PDF-` magic bytes instead.
+- [ ] ~~NEEDS KAIWEI: configure the sources~~ — done, see above. Original note: Measured 2026-09-07 immediately after
       deletion, with nothing configured: facts **0/14**, grounding **3/4**. Every failure
       was an honest "I don't have that information" — zero fabrication — but the avatar
       currently knows nothing. It stays that way until `ABOUT_ME` / `RESUME_URL` /
@@ -320,7 +330,24 @@ Consequences for a few-times-a-year usage pattern:
 - **Do not hold balances with two providers.** Run the Phase 1 bake-off on a small OpenAI
   top-up, pick a winner, then keep exactly one balance alive.
 
-## 11. Open questions
+## 11. Eval reliability
+
+Model temperature is pinned to 0, but OpenAI is not fully deterministic even so, and the
+LLM-judged cases inherit that. `ground-unknown-employer` has flipped between runs twice
+without any related code change.
+
+Reading scores accordingly:
+
+- **Deterministic assertions** (`mustMention`, `mustNotMention`, `mustCallTool`,
+  `mustCaptureUnknown`) are stable and are what the safety-critical properties rest on.
+  `ground-unknown-employer` also carries a hard "must not claim to have worked at Google"
+  assertion, which has never failed — only the judge's stylistic verdict wobbles.
+- **Judged cases** carry roughly ±1 of noise per run.
+
+So a one-point difference between two models means nothing. Before acting on a bake-off
+result, re-run, or treat differences smaller than about 2 points as noise.
+
+## 12. Open questions
 
 - Purge git history of `server/data/`, or accept the past exposure? (needs force push)
 - Off-limits content policy — deferred until after the POC

@@ -81,22 +81,63 @@ async function fetchWithTimeout(url: string): Promise<Response> {
     });
 }
 
-/** Fetches any URL and reduces it to plain text, by content type. */
+/**
+ * A private Google Drive or Docs link returns HTTP 200 with a sign-in page,
+ * not the file. Treating that as success is worse than failing: a login page
+ * would be handed to the model as if it were the resume. Detect it and fail
+ * loudly instead.
+ */
+function assertNotAuthWall(url: string, finalUrl: string, body: string): void {
+    const redirectedToLogin = /accounts\.google\.com|\/ServiceLogin/i.test(finalUrl);
+    const looksLikeLoginPage =
+        /Sign in to continue to Google (Drive|Docs)/i.test(body) ||
+        /<title>\s*(Google Drive|Google Docs)\s*-\s*Sign in/i.test(body);
+
+    if (redirectedToLogin || looksLikeLoginPage) {
+        throw new Error(
+            'the link is not public — Google returned a sign-in page. In Drive, use ' +
+            'Share > General access > "Anyone with the link".',
+        );
+    }
+
+    if (/drive\.google\.com|docs\.google\.com/i.test(url) && /virus scan warning/i.test(body)) {
+        throw new Error('Google served a virus-scan interstitial instead of the file.');
+    }
+}
+
+/** Fetches any URL and reduces it to plain text. */
 async function fetchAsText(url: string): Promise<string> {
     const response = await fetchWithTimeout(normaliseUrl(url));
     if (!response.ok) {
         throw new Error(`${response.status} ${response.statusText}`);
     }
 
-    const contentType = response.headers.get('content-type') ?? '';
+    const buffer = Buffer.from(await response.arrayBuffer());
 
-    if (contentType.includes('pdf') || url.toLowerCase().endsWith('.pdf')) {
-        const buffer = Buffer.from(await response.arrayBuffer());
+    // Sniff the content rather than trusting the content-type header or the
+    // file extension. Google Drive's direct-download URL has no .pdf suffix
+    // and does not report a PDF content type, so header-based detection
+    // silently fed raw "%PDF-1.5 ... FlateDecode" bytes into the prompt.
+    if (buffer.subarray(0, 5).toString('latin1') === '%PDF-') {
         return (await pdfParse(buffer)).text.trim();
     }
 
-    const body = await response.text();
-    return contentType.includes('html') ? htmlToText(body) : body.trim();
+    const body = buffer.toString('utf-8');
+    assertNotAuthWall(url, response.url, body);
+
+    const contentType = response.headers.get('content-type') ?? '';
+    const isHtml = contentType.includes('html') || /^\s*<(!doctype|html)/i.test(body);
+
+    // A Google document link that comes back as a web page did not give us
+    // the file — usually a sharing or link-format problem.
+    if (/drive\.google\.com|docs\.google\.com/i.test(url) && isHtml) {
+        throw new Error(
+            'expected a document but got a web page — check the link is public and ' +
+            'points directly at the file.',
+        );
+    }
+
+    return isHtml ? htmlToText(body) : body.trim();
 }
 
 /**
