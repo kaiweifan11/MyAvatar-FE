@@ -20,8 +20,10 @@ services:
     runtime: node
     plan: free
     region: singapore
-    # Change to version-2 to deploy the v2 branch before merging.
-    branch: develop
+    # Deploying version-2 first, so develop stays as a working fallback:
+    # reverting is a branch change here, not a git revert. Switch both
+    # services to develop once v2 is merged.
+    branch: version-2
     # pnpm workspace: install from the repo root, then run only the server.
     # There is no build step — the server runs from TypeScript source via tsx,
     # which at this scale buys simplicity over a compile stage.
@@ -63,7 +65,7 @@ services:
   - name: MyAvatar-FE-1
     type: web
     runtime: static
-    branch: develop
+    branch: version-2
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter client build
     # Moved from client/build in Phase 1, when Create React App was replaced
     # with Vite.

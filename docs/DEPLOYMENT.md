@@ -63,18 +63,34 @@ year-old URL.
 own warning: include every option currently set on the resource, or Blueprint
 defaults overwrite it. In particular confirm:
 
-- `plan` — the file says `free` on the API. If yours is on a paid plan, change it
-  or the Blueprint downgrades the service.
-- `region: singapore` on the API. Region cannot be changed after creation, so a
-  mismatch means Render will not adopt the service.
-- `branch` — both say `develop`. v2 lives on `version-2`, which has not been
-  pushed. Either merge to `develop`, or change both `branch:` values.
-- Any settings you have that the file does not mention (custom domains, headers,
-  auto-deploy) — add them before applying.
+Confirmed 2026-09-08: both services are on the **free** plan and neither has a
+custom domain, so nothing in the dashboard is at risk of being reset.
+
+- `plan: free` on the API — matches. Static sites have no plan field.
+- `region: singapore` on the API — region cannot be changed after creation, so a
+  mismatch means Render forks a second service instead of adopting this one.
+- `branch: version-2` on both. Deploying v2 on its own branch first leaves
+  `develop` as a working fallback: reverting is a branch change rather than a
+  git revert. Switch both to `develop` once v2 is merged.
 
 Then: **New > Blueprint**, pick this repo, and fill in each `sync: false`
-variable when prompted. See `server/.env.example` for what each does. Set the
-FE's `VITE_BE_URL` to the BE's URL, with no trailing slash.
+variable when prompted. See `server/.env.example` for what each does.
+
+Values to have ready — copy from your local `server/.env`:
+
+| Variable | Notes |
+|---|---|
+| `OPENAI_API_KEY` | |
+| `AVATAR_NAME` | |
+| `ABOUT_ME` | ~3,000 characters, multi-line. Paste **without** the surrounding double quotes — those are a `.env` file requirement, not a value |
+| `RESUME_URL` | The Drive share link. Must stay shared as "Anyone with the link" |
+| `SOURCE_URLS` | |
+| `SMTP_HOST` / `SMTP_PORT` | `smtp.gmail.com` / `587` |
+| `SMTP_USER` / `SMTP_PASS` | Gmail address and the 16-character App Password |
+| `VITE_BE_URL` | **On the static site**, set to the BE's URL with no trailing slash |
+
+`VITE_BE_URL` is inlined at build time, so if you set it after the first build,
+trigger a rebuild — a restart will not pick it up.
 
 ## 2. Settings, if configuring by hand
 
