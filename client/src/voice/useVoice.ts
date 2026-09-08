@@ -119,9 +119,20 @@ export function useSpeechInput({
     const [error, setError] = useState<string | null>(null);
     const [onDevice, setOnDevice] = useState(false);
 
+    // Bumped whenever a session ends, to re-run the reconciling effect below.
+    const [restartTick, setRestartTick] = useState(0);
+
     const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
     const bufferRef = useRef('');
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Guards against a session that ends immediately and restarts forever.
+    const restartCountRef = useRef(0);
+    const restartWindowRef = useRef(0);
+    // Set once on-device recognition has proved itself silent.
+    const localFailedRef = useRef(false);
+    // True while a session is being created, across the async availability check.
+    const startingRef = useRef(false);
 
     const onUtteranceRef = useRef(onUtterance);
     onUtteranceRef.current = onUtterance;
@@ -154,31 +165,45 @@ export function useSpeechInput({
                 // Already stopped.
             }
         }
+        startingRef.current = false;
         setListening(false);
         setInterim('');
     }, []);
 
     const startRecognition = useCallback(async () => {
         const Recognition = getRecognition();
-        if (!Recognition || recognitionRef.current) return;
+        // `startingRef` closes a real gap: this function awaits the on-device
+        // availability check before it claims `recognitionRef`, so two calls
+        // arriving during that await would both pass the null check and each
+        // create a session. The second `start()` then throws InvalidStateError.
+        if (!Recognition || recognitionRef.current || startingRef.current) return;
+        startingRef.current = true;
 
         const lang = navigator.language || 'en-US';
 
         // Prefer on-device recognition where the browser offers it, so audio
-        // never leaves the machine.
+        // never leaves the machine. `available` can report ready and still
+        // produce nothing — the model may not really be usable — so a session
+        // that yields no results at all disables it and the next attempt goes
+        // to the cloud engine. Silence is the worst outcome; the cloud path is
+        // the one that definitely works.
         let local = false;
-        try {
-            if (typeof Recognition.available === 'function') {
-                const status = await Recognition.available({
-                    langs: [lang],
-                    processLocally: true,
-                });
-                local = status === 'available';
+        if (!localFailedRef.current) {
+            try {
+                if (typeof Recognition.available === 'function') {
+                    const status = await Recognition.available({
+                        langs: [lang],
+                        processLocally: true,
+                    });
+                    local = status === 'available';
+                }
+            } catch {
+                // Older browsers have no availability check; use the cloud.
             }
-        } catch {
-            // Older browsers have no availability check; fall back to cloud.
         }
         setOnDevice(local);
+
+        let heardAnything = false;
 
         const recognition = new Recognition();
         recognitionRef.current = recognition;
@@ -191,6 +216,7 @@ export function useSpeechInput({
         recognition.lang = lang;
 
         recognition.onresult = event => {
+            heardAnything = true;
             let pending = '';
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const result = event.results[i]!;
@@ -218,13 +244,23 @@ export function useSpeechInput({
             setMicOn(false);
         };
 
-        // Chrome ends the session on its own after a long silence. Restart so
-        // hands-free stays hands-free.
+        // Chrome ends the session on its own after a few seconds of silence, so
+        // hands-free has to restart it. Bumping a counter is what forces the
+        // reconciling effect to run again — an earlier version called
+        // setMicOn(current => current), which sets the same value, so React
+        // bailed out, no re-render happened, and the mic died silently while
+        // the button carried on flashing.
         recognition.onend = () => {
             setListening(false);
+            if (local && !heardAnything) {
+                // On-device claimed to be ready and heard nothing. Do not keep
+                // choosing it — silence with no error is the hardest failure to
+                // diagnose from the outside.
+                localFailedRef.current = true;
+            }
             if (recognitionRef.current === recognition) {
                 recognitionRef.current = null;
-                setMicOn(current => current);
+                setRestartTick(tick => tick + 1);
             }
         };
 
@@ -233,20 +269,47 @@ export function useSpeechInput({
             setListening(true);
             setError(null);
         } catch {
+            // Almost always InvalidStateError: a session is already running.
+            // Deliberately does NOT bump the restart tick — doing so re-ran this
+            // function, which threw again, which bumped again. React StrictMode
+            // double-invokes effects in development, so that loop fired on the
+            // very first click. `onend` is the only thing that schedules a
+            // restart.
             recognitionRef.current = null;
+        } finally {
+            startingRef.current = false;
         }
     }, [flush, silenceMs]);
 
     // Single place that reconciles intent (micOn, suspended) with reality.
     useEffect(() => {
         if (micOn && !suspended) {
+            // A session that ends instantly and restarts forever would spin the
+            // CPU and never recover. Give up loudly instead. Only restarts are
+            // counted — a normal conversation suspends and resumes the mic on
+            // every turn, and counting those would creep towards the limit and
+            // switch the microphone off mid-Q&A.
+            const now = Date.now();
+            if (now - restartWindowRef.current > 10_000) {
+                restartWindowRef.current = now;
+                restartCountRef.current = 0;
+            }
+            if (restartTick > 0 && ++restartCountRef.current > 12) {
+                setError(
+                    'The microphone keeps dropping out. Check the site has microphone ' +
+                    'permission, and that no other app is using it.',
+                );
+                setMicOn(false);
+                return;
+            }
+
             void startRecognition();
         } else {
             // Suspending mid-sentence should not lose what was already heard.
             if (suspended) flush();
             stopRecognition();
         }
-    }, [micOn, suspended, listening, startRecognition, stopRecognition, flush]);
+    }, [micOn, suspended, restartTick, startRecognition, stopRecognition, flush]);
 
     useEffect(() => () => stopRecognition(), [stopRecognition]);
 
