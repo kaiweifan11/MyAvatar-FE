@@ -100,6 +100,8 @@ Values to have ready — copy from your local `server/.env`:
 | `SMTP_HOST` / `SMTP_PORT` | `smtp.gmail.com` / `587` |
 | `SMTP_USER` / `SMTP_PASS` | Gmail address and the 16-character App Password |
 | `VITE_BE_URL` | **On the static site**, set to the BE's URL with no trailing slash |
+| `VITE_SPEECH_FIXES` | **On the static site.** Respellings for words the browser mispronounces, e.g. `Ada=Ay-duh`. No code default — unset means the mispronunciations come back |
+| `VITE_SPEECH_VOICE` | Optional. Defaults to `Microsoft Mark`. Only a preference: the voice has to exist on the *visitor's* machine |
 
 `VITE_BE_URL` is inlined at build time, so if you set it after the first build,
 trigger a rebuild — a restart will not pick it up.

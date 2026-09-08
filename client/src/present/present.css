@@ -2,19 +2,25 @@
  * Presentation Q&A.
  *
  * Sized for a projector at the back of a room, not a laptop at arm's length:
- * large type, high contrast, generous line height. The answer is the only thing
- * on screen that matters, so everything else stays quiet.
+ * large type, high contrast, generous line height. The Q&A view mirrors the
+ * main screen — avatar on the left, transcript on the right — so moving between
+ * them does not feel like two different products.
  */
 
 .present {
-    max-width: 60rem;
-    margin: 0 auto;
-    padding: 2rem 1.5rem 3rem;
     color: #e8e8ea;
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-.present h1 {
+/* ---------- Prepare ---------- */
+
+.present.prepare {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+}
+
+.present.prepare h1 {
     font-size: 1.9rem;
     margin: 0 0 0.4rem;
 }
@@ -22,10 +28,9 @@
 .present .lede {
     color: #a0a0a8;
     margin: 0 0 2rem;
-    line-height: 1.5;
+    line-height: 1.55;
+    max-width: 46rem;
 }
-
-/* ---------- Prepare ---------- */
 
 .present .card {
     background: #1b1b1f;
@@ -39,6 +44,9 @@
     font-size: 1.05rem;
     margin: 0 0 0.9rem;
     color: #c8c8d0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
 }
 
 .present .hint {
@@ -54,19 +62,15 @@
 }
 
 .present .status.good,
-.present .checks li.good {
-    color: #6ee7a8;
-}
+.present .checks li.good { color: #6ee7a8; }
 
 .present .status.bad,
-.present .checks li.bad {
-    color: #ff8b8b;
-}
+.present .checks li.bad { color: #ff8b8b; }
 
 .present .checks {
     list-style: none;
     padding: 0;
-    margin: 1rem 0 0;
+    margin: 0;
     font-size: 0.9rem;
     line-height: 1.7;
 }
@@ -97,14 +101,8 @@
     cursor: pointer;
 }
 
-.present button:hover:not(:disabled) {
-    background: #3a3a44;
-}
-
-.present button:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-}
+.present button:hover:not(:disabled) { background: #3a3a44; }
+.present button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .present button.primary {
     background: #3b6ef5;
@@ -113,9 +111,7 @@
     padding: 0.7rem 1.6rem;
 }
 
-.present button.primary:hover:not(:disabled) {
-    background: #4d7bf7;
-}
+.present button.primary:hover:not(:disabled) { background: #4d7bf7; }
 
 .present button.link {
     background: none;
@@ -126,100 +122,8 @@
     text-decoration: underline;
 }
 
-/* ---------- Q&A ---------- */
-
-.present.qa {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-    max-width: 68rem;
-}
-
-.qa-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    color: #6f6f78;
-    font-size: 0.85rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid #26262c;
-}
-
-.answers {
-    flex: 1;
-    padding: 1.6rem 0;
-    overflow-y: auto;
-}
-
-.turn {
-    margin-bottom: 1.6rem;
-}
-
-/* The question is context; the answer is what the room reads. */
-.turn.user {
-    color: #8a8a93;
-    font-size: 1.05rem;
-}
-
-.turn.user .who {
-    font-weight: 700;
-    margin-right: 0.6rem;
-    color: #5c5c66;
-}
-
-.turn.user p,
-.turn.assistant p {
-    margin: 0;
-    display: inline;
-}
-
-.turn.assistant {
-    font-size: 1.6rem;
-    line-height: 1.5;
-    color: #f2f2f5;
-}
-
-.turn.assistant p {
-    display: block;
-}
-
-.turn.error {
-    font-size: 1.05rem;
-    color: #ff8b8b;
-}
-
-.thinking {
-    color: #6f6f78;
-    font-size: 1.1rem;
-}
-
-.ask {
-    display: flex;
-    gap: 0.7rem;
-    padding-top: 1rem;
-    border-top: 1px solid #26262c;
-}
-
-.ask input {
-    flex: 1;
-    background: #17171b;
-    border: 1px solid #33333c;
-    border-radius: 8px;
-    padding: 0.85rem 1rem;
-    color: #e8e8ea;
-    font-size: 1.05rem;
-}
-
-.ask input:focus {
-    outline: none;
-    border-color: #3b6ef5;
-}
-
-@media (max-width: 700px) {
-    .turn.assistant {
-        font-size: 1.25rem;
-    }
-}
+.present button.link:hover { background: none; color: #b0b0ba; }
+.present .recheck { margin-left: auto; }
 
 /* ---------- Deck preview ----------
  * "12 slides" says nothing about whether the text is any good. Showing the
@@ -266,4 +170,174 @@
     margin-top: 0.4rem;
     color: #8fbf9f;
     font-size: 0.83rem;
+}
+
+/* ---------- Q&A: avatar left, answers right ---------- */
+
+.present.qa {
+    display: grid;
+    grid-template-columns: minmax(300px, 38%) 1fr;
+    gap: 2.5rem;
+    align-items: center;
+    min-height: 100vh;
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 2rem 2.5rem;
+    box-sizing: border-box;
+}
+
+.present.qa .stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.present.qa .talk {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 1.75rem;
+    padding: 0.9rem 2.2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #fff;
+    background: #3b6ef5;
+    border: 1px solid #3b6ef5;
+    border-radius: 999px;
+}
+
+.present.qa .talk:hover:not(:disabled) { background: #4d7bf7; }
+
+.present.qa .talk.live {
+    background: #b23b3b;
+    border-color: #b23b3b;
+}
+
+.present.qa .talk .icon { font-size: 1.1rem; line-height: 1; }
+
+.present .voice-note {
+    color: #8a8a93;
+    font-size: 0.9rem;
+    margin: 1rem 0 0;
+    max-width: 22rem;
+    min-height: 1.3em;
+}
+
+.present .voice-error {
+    color: #ff8b8b;
+    font-size: 0.88rem;
+    margin: 0.6rem 0 0;
+    max-width: 22rem;
+}
+
+.present .deck-name {
+    color: #5c5c66;
+    font-size: 0.8rem;
+    margin-top: 2rem;
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+}
+
+/* The answer panel. Type is deliberately large — this is read from the back of
+   a room, not from a laptop. */
+.present.qa .panel {
+    display: flex;
+    flex-direction: column;
+    height: min(84vh, 780px);
+    background: #17171b;
+    border: 1px solid #26262c;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.present .answers {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.75rem;
+}
+
+.present .empty {
+    color: #5c5c66;
+    font-size: 1rem;
+    margin: 0;
+}
+
+.present .turn { margin-bottom: 1.6rem; }
+
+/* The question is context; the answer is what the room reads. */
+.present .turn.user {
+    color: #8a8a93;
+    font-size: 1.05rem;
+}
+
+.present .turn.user .who {
+    font-weight: 700;
+    margin-right: 0.6rem;
+    color: #5c5c66;
+}
+
+.present .turn.user p { margin: 0; display: inline; }
+
+.present .turn.assistant {
+    font-size: 1.55rem;
+    line-height: 1.5;
+    color: #f2f2f5;
+}
+
+.present .turn.assistant p { margin: 0; }
+
+.present .turn.error { font-size: 1.05rem; color: #ff8b8b; }
+
+.present .thinking {
+    color: #6f6f78;
+    font-size: 1.1rem;
+}
+
+.present .ask {
+    display: flex;
+    gap: 0.7rem;
+    padding: 1rem;
+    border-top: 1px solid #26262c;
+}
+
+.present .ask input {
+    flex: 1;
+    background: #141418;
+    border: 1px solid #33333c;
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    color: #e8e8ea;
+    font-size: 1.05rem;
+}
+
+.present .ask input:focus {
+    outline: none;
+    border-color: #3b6ef5;
+}
+
+.present .ask button.send {
+    background: #3b6ef5;
+    border-color: #3b6ef5;
+    color: #fff;
+}
+
+.present .ask button.send:hover:not(:disabled) { background: #4d7bf7; }
+
+.present .ask button.speak.on {
+    background: #2f5fd0;
+    border-color: #2f5fd0;
+}
+
+@media (max-width: 1000px) {
+    .present.qa {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+        padding: 1.5rem 1rem;
+        align-items: start;
+    }
+
+    .present.qa .panel { height: min(58vh, 460px); }
+    .present .turn.assistant { font-size: 1.25rem; }
 }

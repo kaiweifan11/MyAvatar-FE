@@ -236,8 +236,23 @@ Also done, discovered mid-phase:
 ### Phase 4 — Later
 
 - [ ] Audience join toggle: QR code, join page, moderation queue, WebSocket fan-out
-- [ ] ⚠️ Add `gpt-realtime-mini` to the OpenAI project allow-list before starting voice work
-- [ ] Speech-to-speech via OpenAI Realtime over WebRTC with ephemeral tokens
+- [x] **Voice input and output on both screens**, using the browser's own speech APIs.
+      Chosen over the OpenAI audio endpoints for the first cut because it is free, adds no
+      server round-trip and needs no key handling — all of it is contained in
+      `client/src/voice/useVoice.ts`, so swapping in the paid endpoints later is a
+      one-file change. Support in 2026 is Chrome, Edge and Safari, all still behind the
+      `webkitSpeechRecognition` prefix; Firefox keeps it behind a flag, so the buttons hide
+      rather than break. Both APIs require HTTPS or localhost.
+      - Dictation **fills the box rather than sending**: a misheard question would
+        otherwise be answered on a projector in front of a room.
+      - Spoken answers are **off by default** and remembered per browser, and speak once on
+        completion rather than per streamed chunk. Decision D1 kept answers on screen, so
+        the presenter opts in.
+- [ ] Upgrade voice quality if the OS voices disappoint: `gpt-4o-transcribe` at $0.006/min
+      is more accurate in a noisy room, and `gpt-4o-mini-tts` at $0.015/min sounds far
+      better than browser synthesis — about $0.02 for a 20-minute Q&A.
+- [ ] ⚠️ Add `gpt-realtime-mini` to the OpenAI project allow-list before full realtime work
+- [ ] Full speech-to-speech via OpenAI Realtime over WebRTC with ephemeral tokens
       (browser talks to OpenAI directly; the server only mints 60-second tokens and never
       proxies audio)
 - [ ] Optional voice clone so it sounds like Kaiwei — with an explicit "this is an AI"

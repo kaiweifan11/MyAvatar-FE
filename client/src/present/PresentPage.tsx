@@ -1,8 +1,11 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { MAX_MESSAGE_LENGTH, type Deck } from '@myavatar/shared';
 import { parseDeck } from '../deck/parseDeck';
+import { speechOutputSupported, useSpeechInput, useSpeechOutput } from '../voice/useVoice';
+import AvatarOrb, { type OrbState } from '../voice/AvatarOrb';
+import SpokenText from '../voice/SpokenText';
 import './present.css';
 
 const apiUrl = import.meta.env.VITE_BE_URL;
@@ -24,6 +27,7 @@ const PresentPage = () => {
     const [started, setStarted] = useState(false);
     const [input, setInput] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
     // The transport is created once, so it reads the deck through a ref rather
     // than closing over a stale value.
@@ -39,21 +43,37 @@ const PresentPage = () => {
 
     const busy = status === 'submitted' || status === 'streaming';
 
-    const handleFile = async (file: File | undefined) => {
-        if (!file) return;
-        setParsing(true);
-        setDeckError(null);
-        try {
-            setDeck(await parseDeck(file));
-        } catch (err) {
-            setDeck(null);
-            setDeckError(err instanceof Error ? err.message : 'Could not read that file.');
-        } finally {
-            setParsing(false);
-        }
-    };
+    const voiceOut = useSpeechOutput();
 
-    const runChecks = async () => {
+    // Hands-free: speak the question, pause, and it sends itself — then the mic
+    // keeps listening for the next one. Suspended while a request is in flight
+    // or the avatar is talking, otherwise it transcribes its own voice and asks
+    // it straight back.
+    const voiceIn = useSpeechInput({
+        onUtterance: (text: string) => sendMessage({ text: text.slice(0, MAX_MESSAGE_LENGTH) }),
+        suspended: busy || voiceOut.speaking,
+    });
+
+    // Speak each answer once, when it finishes streaming — not per chunk.
+    const spokenRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (busy) return;
+        const last = messages.at(-1);
+        if (!last || last.role !== 'assistant' || last.id === spokenRef.current) return;
+        const text = last.parts.filter(p => p.type === 'text').map(p => p.text).join('');
+        if (!text) return;
+        spokenRef.current = last.id;
+        voiceOut.speak(text, last.id);
+    }, [busy, messages, voiceOut]);
+
+    useEffect(() => {
+        scrollRef.current?.scrollTo({
+            top: scrollRef.current.scrollHeight,
+            behavior: 'smooth',
+        });
+    }, [messages, busy]);
+
+    const runChecks = useCallback(async () => {
         setChecking(true);
         setChecks(null);
         try {
@@ -92,6 +112,49 @@ const PresentPage = () => {
         } finally {
             setChecking(false);
         }
+    }, []);
+
+    const handleFile = async (file: File | undefined) => {
+        if (!file) return;
+        setParsing(true);
+        setDeckError(null);
+        setChecks(null);
+        try {
+            setDeck(await parseDeck(file));
+        } catch (err) {
+            setDeck(null);
+            setDeckError(err instanceof Error ? err.message : 'Could not read that file.');
+        } finally {
+            setParsing(false);
+        }
+    };
+
+    // Loading a deck is the moment you are getting ready, so check then rather
+    // than making it a button someone can forget. It also wakes the service
+    // early, which is the whole point of doing this before you go on.
+    useEffect(() => {
+        if (deck) void runChecks();
+    }, [deck, runChecks]);
+
+    const orbState: OrbState = voiceOut.speaking
+        ? 'speaking'
+        : busy
+            ? 'thinking'
+            : voiceIn.micOn
+                ? 'listening'
+                : 'idle';
+
+    // Same one-button rule as the main screen: stop whatever is happening.
+    // Cutting off a wrong answer in front of a room is exactly when you do not
+    // want to be hunting for the right control.
+    const voiceActive = voiceIn.micOn || voiceOut.speaking;
+    const handleVoiceButton = () => {
+        if (voiceActive) {
+            voiceOut.stop();
+            voiceIn.stop();
+        } else {
+            voiceIn.toggle();
+        }
     };
 
     const ask = () => {
@@ -104,16 +167,23 @@ const PresentPage = () => {
 
     // ---------------- Prepare ----------------
     if (!started) {
+        const chars = deck?.slides.reduce((n, s) => n + s.text.length, 0) ?? 0;
+        // An image-heavy deck parses to almost nothing. Better to say so now
+        // than to discover it mid-Q&A.
+        const thin = Boolean(deck) && Math.round(chars / (deck?.slides.length || 1)) < 40;
+        const allOk = checks?.every(c => c.ok) ?? false;
+
         return (
             <div className="present prepare">
                 <h1>Presentation Q&amp;A</h1>
                 <p className="lede">
-                    Load your deck and check everything works — ideally a few minutes before
-                    you go on, so the server is awake.
+                    Load your deck a few minutes before you go on. Everything else is
+                    checked automatically — including waking the server, which takes up to a
+                    minute from cold.
                 </p>
 
                 <section className="card">
-                    <h2>1. Load your deck</h2>
+                    <h2>Your deck</h2>
                     <input
                         type="file"
                         accept=".pptx,.pdf"
@@ -126,65 +196,62 @@ const PresentPage = () => {
 
                     {parsing && <p className="status">Reading deck…</p>}
                     {deckError && <p className="status bad">{deckError}</p>}
-                    {deck && (() => {
-                        const chars = deck.slides.reduce((n, s) => n + s.text.length, 0);
-                        const perSlide = Math.round(chars / deck.slides.length);
-                        // An image-heavy deck parses to almost nothing. Better to
-                        // say so now than to discover it mid-Q&A.
-                        const thin = perSlide < 40;
-                        return (
-                            <>
-                                <p className={`status ${thin ? 'bad' : 'good'}`}>
-                                    {deck.name} — {deck.slides.length} slides,{' '}
-                                    {chars.toLocaleString()} characters
-                                    {deck.hasNotes ? ', speaker notes included' : ', no speaker notes'}
+
+                    {deck && (
+                        <>
+                            <p className={`status ${thin ? 'bad' : 'good'}`}>
+                                {deck.name} — {deck.slides.length} slides,{' '}
+                                {chars.toLocaleString()} characters
+                                {deck.hasNotes ? ', speaker notes included' : ', no speaker notes'}
+                            </p>
+                            {thin && (
+                                <p className="hint">
+                                    That is very little text per slide. If your slides are
+                                    mostly images or screenshots, there is nothing to read —
+                                    the answers will be thin. Speaker notes would fix it.
                                 </p>
-                                {thin && (
-                                    <p className="hint">
-                                        That is very little text per slide. If your slides are
-                                        mostly images or screenshots, there is nothing to read —
-                                        the answers will be thin. Speaker notes would fix it.
-                                    </p>
-                                )}
-                                <details className="preview">
-                                    <summary>Show exactly what the avatar will read</summary>
-                                    {deck.slides.map(slide => (
-                                        <div key={slide.number} className="slide-preview">
-                                            <h3>Slide {slide.number}</h3>
-                                            <pre>{slide.text || '(no text found on this slide)'}</pre>
-                                            {slide.notes && (
-                                                <pre className="notes">Notes: {slide.notes}</pre>
-                                            )}
-                                        </div>
-                                    ))}
-                                </details>
-                            </>
-                        );
-                    })()}
-                </section>
-
-                <section className="card">
-                    <h2>2. Check it's ready</h2>
-                    <button onClick={runChecks} disabled={checking}>
-                        {checking ? 'Checking…' : 'Run checks'}
-                    </button>
-                    <p className="hint">
-                        Wakes the server, reloads your background, and spends a few tokens on a
-                        real request — the only way to prove the API key still works and has
-                        credit.
-                    </p>
-
-                    {checks && (
-                        <ul className="checks">
-                            {checks.map(check => (
-                                <li key={check.name} className={check.ok ? 'good' : 'bad'}>
-                                    <span className="mark">{check.ok ? '✓' : '✗'}</span>
-                                    <strong>{check.name}</strong> {check.detail}
-                                </li>
-                            ))}
-                        </ul>
+                            )}
+                            <details className="preview">
+                                <summary>Show exactly what the avatar will read</summary>
+                                {deck.slides.map(slide => (
+                                    <div key={slide.number} className="slide-preview">
+                                        <h3>Slide {slide.number}</h3>
+                                        <pre>{slide.text || '(no text found on this slide)'}</pre>
+                                        {slide.notes && (
+                                            <pre className="notes">Notes: {slide.notes}</pre>
+                                        )}
+                                    </div>
+                                ))}
+                            </details>
+                        </>
                     )}
                 </section>
+
+                {(checking || checks) && (
+                    <section className="card">
+                        <h2>
+                            Readiness
+                            {!checking && (
+                                <button className="link recheck" onClick={runChecks}>
+                                    re-check
+                                </button>
+                            )}
+                        </h2>
+
+                        {checking && <p className="status">Waking the server and checking…</p>}
+
+                        {checks && (
+                            <ul className="checks">
+                                {checks.map(check => (
+                                    <li key={check.name} className={check.ok ? 'good' : 'bad'}>
+                                        <span className="mark">{check.ok ? '✓' : '✗'}</span>
+                                        <strong>{check.name}</strong> {check.detail}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </section>
+                )}
 
                 <button
                     className="primary"
@@ -194,6 +261,12 @@ const PresentPage = () => {
                     Start Q&amp;A
                 </button>
                 {!deck && <p className="hint">Load a deck to continue.</p>}
+                {deck && checks && !allOk && (
+                    <p className="hint">
+                        Something above failed — you can still start, but expect it to bite
+                        during the Q&amp;A.
+                    </p>
+                )}
             </div>
         );
     }
@@ -201,56 +274,113 @@ const PresentPage = () => {
     // ---------------- Q&A ----------------
     return (
         <div className="present qa">
-            <header className="qa-header">
-                <span>{deck?.name}</span>
-                <button className="link" onClick={() => setStarted(false)}>
-                    Back to setup
-                </button>
-            </header>
-
-            <div className="answers">
-                {messages.map(message => {
-                    const text = message.parts
-                        .filter(part => part.type === 'text')
-                        .map(part => part.text)
-                        .join('');
-                    if (!text) return null;
-                    return (
-                        <div key={message.id} className={`turn ${message.role}`}>
-                            {message.role === 'user' && <span className="who">Q</span>}
-                            <p>{text}</p>
-                        </div>
-                    );
-                })}
-
-                {status === 'submitted' && <p className="thinking">Thinking…</p>}
-                {error && (
-                    <p className="turn assistant error">
-                        Something went wrong. If the server was asleep this can take a minute —
-                        try again.
-                    </p>
-                )}
-            </div>
-
-            <div className="ask">
-                <input
-                    ref={inputRef}
-                    autoFocus
-                    value={input}
-                    onChange={e => setInput(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
-                    onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            ask();
-                        }
-                    }}
-                    placeholder="Type the audience question…"
-                    disabled={busy}
+            <section className="stage">
+                <AvatarOrb
+                    state={orbState}
+                    wordCount={voiceOut.progress.wordCount}
+                    synced={voiceOut.progress.synced}
+                    size={260}
                 />
-                <button onClick={ask} disabled={busy || !input.trim()}>
-                    Ask
-                </button>
-            </div>
+
+                {voiceIn.supported && (
+                    <button
+                        className={`talk ${voiceActive ? 'live' : ''}`}
+                        onClick={handleVoiceButton}
+                    >
+                        <span className="icon" aria-hidden="true">
+                            {voiceActive ? '■' : '\u{1F3A4}'}
+                        </span>
+                        {voiceActive ? 'Stop' : 'Ask'}
+                    </button>
+                )}
+
+                <p className="voice-note">
+                    {voiceIn.micOn
+                        ? voiceIn.interim
+                            ? `“${voiceIn.interim}”`
+                            : 'Listening — say the question, then pause.'
+                        : 'Tap to take a question from the room.'}
+                </p>
+                {voiceIn.error && <p className="voice-error">{voiceIn.error}</p>}
+
+                <p className="deck-name">
+                    {deck?.name}
+                    <button className="link" onClick={() => setStarted(false)}>
+                        change
+                    </button>
+                </p>
+            </section>
+
+            <section className="panel">
+                <div className="answers" ref={scrollRef}>
+                    {messages.length === 0 && !busy && (
+                        <p className="empty">
+                            Answers appear here, large enough to read from the back.
+                        </p>
+                    )}
+
+                    {messages.map(message => {
+                        const text = message.parts
+                            .filter(part => part.type === 'text')
+                            .map(part => part.text)
+                            .join('');
+                        if (!text) return null;
+
+                        return (
+                            <div key={message.id} className={`turn ${message.role}`}>
+                                {message.role === 'user' && <span className="who">Q</span>}
+                                <p>
+                                    <SpokenText
+                                        text={text}
+                                        id={message.id}
+                                        progress={voiceOut.progress}
+                                    />
+                                </p>
+                            </div>
+                        );
+                    })}
+
+                    {status === 'submitted' && <p className="thinking">Thinking…</p>}
+                    {error && (
+                        <p className="turn assistant error">
+                            Something went wrong. If the server was asleep this can take a
+                            minute — try again.
+                        </p>
+                    )}
+                </div>
+
+                <div className="ask">
+                    <input
+                        ref={inputRef}
+                        value={voiceIn.micOn && voiceIn.interim ? voiceIn.interim : input}
+                        onChange={e => setInput(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                ask();
+                            }
+                        }}
+                        placeholder={voiceIn.micOn
+                            ? 'Listening — speak, then pause…'
+                            : 'Or type the question…'}
+                        disabled={busy}
+                    />
+                    <button className="send" onClick={ask} disabled={busy || !input.trim()}>
+                        Ask
+                    </button>
+                    {speechOutputSupported && (
+                        <button
+                            className={`speak ${voiceOut.enabled ? 'on' : ''}`}
+                            onClick={voiceOut.toggle}
+                            title={voiceOut.enabled
+                                ? 'Answers are read aloud — click to silence'
+                                : 'Read answers aloud'}
+                        >
+                            {voiceOut.enabled ? '\u{1F50A}' : '\u{1F507}'}
+                        </button>
+                    )}
+                </div>
+            </section>
         </div>
     );
 };

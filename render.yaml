@@ -73,6 +73,18 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # Respellings for words the browser's speech synthesis mispronounces,
+      # as "Word=Re-spelling" pairs separated by semicolons. There is no code
+      # default, so leaving this unset silently reintroduces the mispronounced
+      # names — set it to the same value as client/.env.local.
+      - key: VITE_SPEECH_FIXES
+        sync: false
+      # Voice for spoken answers, matched as a substring of the installed name.
+      # Defaults to "Microsoft Mark" in code; set only to override. Note the
+      # voice must exist on the VISITOR's machine, so this is a preference
+      # rather than a guarantee.
+      - key: VITE_SPEECH_VOICE
+        sync: false
       # Renamed from REACT_APP_BE_URL in Phase 1. Vite inlines VITE_* at BUILD
       # time, not runtime, so changing this needs a rebuild, not a restart.
       # Set it to the API service's URL, with no trailing slash.
