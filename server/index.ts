@@ -20,6 +20,8 @@ import { tools } from './tools';
 import { getSystemPrompt } from './utils/getSystemPrompt';
 import { rateLimit } from './utils/rateLimit';
 import { checkRelevance } from './utils/relevanceGate';
+import { reportUnansweredQuestion } from './utils/unknownQuestion';
+import { verifyNotificationChannels } from './utils/notify';
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -110,6 +112,15 @@ app.post('/chat', rateLimit, async (req: Request, res: Response) => {
             // footprint it is what lets the avatar answer anything recent.
             tools: webSearchTool ? { ...tools, web_search: webSearchTool } : tools,
             stopWhen: stepCountIs(MAX_STEPS),
+            // Backstop for record_unknown_question, which the model often
+            // declines to call — see utils/unknownQuestion.ts. Runs after the
+            // answer has streamed, so it cannot affect the response.
+            onFinish: ({ text, steps }) => {
+                const toolsCalled = steps.flatMap(step =>
+                    step.toolCalls.map(call => call.toolName),
+                );
+                void reportUnansweredQuestion(userMessage, text, toolsCalled);
+            },
         });
 
         await pipeUIMessageStreamToResponse({
@@ -131,4 +142,7 @@ app.post('/chat', rateLimit, async (req: Request, res: Response) => {
 // ===== Start Server =====
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
+    // Surface a broken notification setup at boot rather than the first time
+    // someone leaves their email and it silently goes nowhere.
+    void verifyNotificationChannels();
 });

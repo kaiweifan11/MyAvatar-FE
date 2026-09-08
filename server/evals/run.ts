@@ -5,6 +5,7 @@ import { cases, type EvalCase } from './cases';
 import { tools } from '../tools';
 import { getSystemPrompt } from '../utils/getSystemPrompt';
 import { checkRelevance } from '../utils/relevanceGate';
+import { looksLikeNonAnswer } from '../utils/unknownQuestion';
 
 /**
  * Eval runner for the avatar.
@@ -133,6 +134,15 @@ async function runCase(testCase: EvalCase, system: string): Promise<CaseResult> 
 
     for (const forbidden of testCase.mustNotMention ?? []) {
         if (contains(answer, forbidden)) failures.push(`should not say: "${forbidden}"`);
+    }
+
+    if (
+        testCase.mustCaptureUnknown &&
+        !toolsCalled.includes('record_unknown_question') &&
+        !looksLikeNonAnswer(answer)
+    ) {
+        failures.push('unanswered question was not captured (no tool call, and the ' +
+            'answer did not read as a non-answer)');
     }
 
     if (testCase.mustCallTool && !toolsCalled.includes(testCase.mustCallTool)) {

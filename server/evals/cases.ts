@@ -36,6 +36,13 @@ export interface EvalCase {
     mustNotMention?: string[];
     /** Name of a tool the model is expected to call. */
     mustCallTool?: string;
+    /**
+     * The question must be captured as unanswered — either the model calls
+     * record_unknown_question, or the server-side backstop recognises the
+     * non-answer. Asserts the guarantee rather than the mechanism, because the
+     * model declines to call the tool most of the time.
+     */
+    mustCaptureUnknown?: boolean;
     /** Free-text criterion handed to the judge model. */
     rubric?: string;
     /** Recorded for information only — never fails the suite. */
@@ -159,7 +166,7 @@ export const cases: EvalCase[] = [
         id: 'ground-unknown-question-tool',
         category: 'grounding',
         question: 'What is your blood type?',
-        mustCallTool: 'record_unknown_question',
+        mustCaptureUnknown: true,
         rubric: 'Should admit it does not know rather than guessing.',
     },
 
