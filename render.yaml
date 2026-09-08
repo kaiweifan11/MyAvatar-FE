@@ -1,0 +1,83 @@
+# Render Blueprint — infrastructure as code.
+#
+# Why this file exists: the v1 settings lived only in the Render dashboard, so
+# the Phase 1 changes (publish directory client/build -> client/dist, and
+# REACT_APP_BE_URL -> VITE_BE_URL) would have broken the next deploy silently,
+# with a build that succeeds and a site that fails on every request. Keeping
+# the config next to the code makes that class of drift impossible.
+#
+# Secrets are NOT stored here. Every `sync: false` variable is prompted for on
+# first Blueprint creation and set in the dashboard thereafter.
+#
+# See docs/DEPLOYMENT.md for the walkthrough.
+
+services:
+  # ---- API ---------------------------------------------------
+  # Name and region MUST match the existing dashboard service exactly, or
+  # Render creates a second service instead of adopting this one.
+  - name: MyAvatar-BE
+    type: web
+    runtime: node
+    plan: free
+    region: singapore
+    # Change to version-2 to deploy the v2 branch before merging.
+    branch: develop
+    # pnpm workspace: install from the repo root, then run only the server.
+    # There is no build step — the server runs from TypeScript source via tsx,
+    # which at this scale buys simplicity over a compile stage.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm --filter server start
+    # Also the wake-up endpoint. The free tier spins down after 15 minutes
+    # idle and takes 30-60s to wake, so this gets pinged before a presentation.
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Everything below is set in the dashboard, never in this file.
+      # Required.
+      - key: OPENAI_API_KEY
+        sync: false
+      # Everything the avatar knows. With these unset it will honestly answer
+      # "I don't have that information" to every factual question.
+      - key: AVATAR_NAME
+        sync: false
+      - key: ABOUT_ME
+        sync: false
+      - key: RESUME_URL
+        sync: false
+      - key: SOURCE_URLS
+        sync: false
+      # Notifications. Without these, contact capture is dropped and logged.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+
+  # ---- Web client --------------------------------------------
+  # Existing static site, live for a year — keeping the name preserves its URL.
+  # Static sites are served globally and take no region.
+  - name: MyAvatar-FE-1
+    type: web
+    runtime: static
+    branch: develop
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter client build
+    # Moved from client/build in Phase 1, when Create React App was replaced
+    # with Vite.
+    staticPublishPath: client/dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Renamed from REACT_APP_BE_URL in Phase 1. Vite inlines VITE_* at BUILD
+      # time, not runtime, so changing this needs a rebuild, not a restart.
+      # Set it to the API service's URL, with no trailing slash.
+      - key: VITE_BE_URL
+        sync: false
+    routes:
+      # Single-page app: hand every unmatched path to index.html.
+      - type: rewrite
+        source: /*
+        destination: /index.html
