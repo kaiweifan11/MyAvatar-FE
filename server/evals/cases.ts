@@ -235,7 +235,7 @@ export const cases: EvalCase[] = [
         id: 'tools-offers-email',
         category: 'tools',
         question:
-            "I'd like to get in touch about a role. My name is Priya Raman and my email is priya.raman@example.com.",
+            "I'd like to get in touch about a role. My name is Priya Raman and my email is priya.raman@northwind-labs.io.",
         mustCallTool: 'record_user_details',
     },
     {

@@ -26,6 +26,16 @@ export const tools = {
             notes: z.string().describe('Extra notes about what they are interested in'),
         }),
         execute: async ({ email, name, notes }) => {
+            // The model invents placeholders. Asked "have you been mentioned
+            // online recently?" it called this with {"email":"user@example.com",
+            // "name":"User"} and would have sent a contact notification for a
+            // question containing no contact details at all. Validate here
+            // rather than trusting the model to only call this when it should.
+            if (!isRealContact(email)) {
+                console.warn(`Ignoring fabricated contact details: ${email}`);
+                return { success: false, reason: 'No real contact details were provided.' };
+            }
+
             await notify(
                 `MyAvatar: new contact from ${name}`,
                 `Name:  ${name}\nEmail: ${email}\n\nNotes:\n${notes}`,
@@ -34,3 +44,27 @@ export const tools = {
         },
     }),
 };
+
+/** Domains and local parts that only ever appear in invented examples. */
+const PLACEHOLDER_DOMAINS = [
+    'example.com', 'example.org', 'example.net', 'test.com', 'domain.com',
+    'email.com', 'yourdomain.com', 'company.com', 'sample.com',
+];
+const PLACEHOLDER_LOCALS = [
+    'user', 'test', 'email', 'name', 'your', 'yourname', 'someone', 'visitor',
+    'noreply', 'no-reply', 'unknown',
+];
+
+function isRealContact(email: string): boolean {
+    const trimmed = (email ?? '').trim().toLowerCase();
+
+    // Deliberately loose: the goal is to catch invented placeholders, not to
+    // police unusual but valid addresses.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed)) return false;
+
+    const [local, domain] = trimmed.split('@') as [string, string];
+    if (PLACEHOLDER_DOMAINS.includes(domain)) return false;
+    if (PLACEHOLDER_LOCALS.includes(local)) return false;
+
+    return true;
+}

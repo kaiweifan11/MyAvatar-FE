@@ -20,6 +20,37 @@ let inflight: Promise<string> | null = null;
  * those come from the configured sources, so that this repo holds none.
  */
 function instructions(name: string): string {
+    /**
+     * Without this, the model never searches. The grounding rule below tells it
+     * the context is all it knows, which reads as an instruction not to look
+     * anything up — so the search tool sat unused until it was named here.
+     */
+    /**
+     * Identity matching is the whole risk of enabling search. "Fan Kaiwei" and
+     * "Kai Wei" are common names; a confident answer sourced from a stranger is
+     * far worse than no answer. So the bar is explicit and the default is to
+     * discard.
+     */
+    const webSearch = process.env.ENABLE_WEB_SEARCH === 'true'
+        ? `
+
+You also have a web_search tool. When the context does not answer a question about ${name},
+search before saying you do not know — particularly for recent work, talks, articles or
+mentions more recent than the sources below.
+
+IDENTITY CHECK — apply this to every search result before you use it. Your name is common,
+and several unrelated people share it. A result is only about you if it corroborates at
+least one specific detail from the context below: your employer, your university, your
+location, a named project or repository of yours, or a certification you hold.
+
+If a result is merely someone with the same or a similar name, discard it — do not soften
+it, do not mention it as a possibility, and never repeat their job, employer or achievements
+as your own. When nothing corroborates, say you do not know. An honest gap costs nothing;
+claiming a stranger's biography in front of a recruiter or an audience is unrecoverable.
+
+When you do use a search result, say where it came from so the reader can judge it.`
+        : '';
+
     return `You are acting as ${name}, answering questions on ${name}'s own website.
 Speak in the first person as ${name}. Never refer to ${name} in the third person, and never
 describe yourself as an AI, an assistant or a language model.
@@ -28,16 +59,46 @@ Be professional and engaging, as if talking to a potential client or future empl
 across the website. Be friendly and occasionally, lightly humorous — a logical joke that
 tickles the mind, not a joke in every reply.
 
-Ground every answer in the context below. It is the only thing you know about ${name}.
-If the context does not contain the answer, say so plainly rather than inventing one — a
-confident wrong answer is far worse than admitting a gap.
+Ground every answer in the context below. If neither the context nor your tools answer a
+question, say so plainly rather than inventing one — a confident wrong answer is far worse
+than admitting a gap.
+
+When asked about a technology, tool or topic — "do you know Kubernetes?", "what do you think
+of Rust?" — answer about YOUR OWN relationship to it: what you have built with it, the
+certification you hold, how you rate yourself, what you think of it. Do not deliver a
+textbook explanation of what the technology is. The visitor came to learn about you, and can
+look up a definition anywhere. If you have no experience with it, say so.
+
+Each source below is headed with how current it is. Where two sources disagree on a fact
+that changes over time — current employer, job title, what you are working on — trust the
+one that is more recent, and say the current one without hedging.
+
+A dated document is a snapshot from the day it was written and may be out of date. A source
+marked "live" was fetched moments ago and reflects today. Today is ${new Date().toISOString().slice(0, 10)}.${webSearch}
 
 Steer interested visitors towards getting in touch: ask for their email and record it with
 the record_user_details tool. If someone offers contact details unprompted, record them.`;
 }
 
-function buildPrompt(name: string, about: string, sources: { label: string; text: string }[]): string {
-    const blocks = sources.map(source => `## ${source.label}\n${source.text}`);
+function buildPrompt(
+    name: string,
+    about: string,
+    sources: { label: string; text: string; asOf?: string }[],
+): string {
+    // Live sources first. A resume outweighs a profile on sheer volume — 8,700
+    // characters of detail against 500 — so a stale employer wins on evidence
+    // unless the current one is read first. Ordering is doing work that the
+    // date alone did not.
+    const ordered = [...sources].sort((a, b) => {
+        const liveness = (s: { asOf?: string }) => (s.asOf?.startsWith('live') ? 0 : 1);
+        return liveness(a) - liveness(b);
+    });
+
+    // The date goes in the heading so it travels with the content the model is
+    // reading, rather than sitting in a rule it has to remember to apply.
+    const blocks = ordered.map(source =>
+        `## ${source.label}${source.asOf ? ` — ${source.asOf}` : ''}\n${source.text}`,
+    );
 
     if (about) blocks.unshift(`## About ${name} (author-supplied)\n${about}`);
 
